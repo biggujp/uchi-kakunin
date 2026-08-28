@@ -565,7 +565,7 @@ function switchPage(id) {
     window.scrollTo({top:0,behavior:'smooth'});
 }
 
-// ===== IMAGE COMPRESSION =====
+// ===== IMAGE COMPRESSION (aggressive) =====
 function compressImage(file, maxWidth, quality) {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -577,7 +577,7 @@ function compressImage(file, maxWidth, quality) {
                 if (w > maxWidth) { h = (maxWidth / w) * h; w = maxWidth; }
                 canvas.width = w; canvas.height = h;
                 canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                resolve(canvas.toDataURL('image/jpeg', quality || 0.7));
+                resolve(canvas.toDataURL('image/jpeg', quality || 0.5));
             };
             img.src = e.target.result;
         };
@@ -585,11 +585,49 @@ function compressImage(file, maxWidth, quality) {
     });
 }
 
+// ===== INDEXEDDB PHOTO STORE =====
+const _photoDB_NAME = 'UchiPhotos';
+const _photoDB_VER = 1;
+function _openPhotoDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(_photoDB_NAME, _photoDB_VER);
+        req.onupgradeneeded = e => { const db = e.target.result; if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos'); };
+        req.onsuccess = e => resolve(e.target.result);
+        req.onerror = e => reject(e.target.error);
+    });
+}
+async function savePhotoToIDB(key, base64) {
+    try {
+        const db = await _openPhotoDB();
+        const tx = db.transaction('photos', 'readwrite');
+        tx.objectStore('photos').put(base64, key);
+        return key;
+    } catch(e) { console.error('IDB save error:', e); return null; }
+}
+async function getPhotoFromIDB(key) {
+    try {
+        const db = await _openPhotoDB();
+        const tx = db.transaction('photos', 'readonly');
+        return await new Promise((resolve) => {
+            const req = tx.objectStore('photos').get(key);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+        });
+    } catch(e) { return null; }
+}
+async function deletePhotoFromIDB(key) {
+    try {
+        const db = await _openPhotoDB();
+        const tx = db.transaction('photos', 'readwrite');
+        tx.objectStore('photos').delete(key);
+    } catch(e) {}
+}
+
 // ===== HOUSE PHOTOS =====
 async function handleHousePhotos(input) {
     for (const file of Array.from(input.files)) {
         try {
-            const compressed = await compressImage(file, 800, 0.7);
+            const compressed = await compressImage(file, 400, 0.5);
             housePhotos.push(compressed);
         } catch(err) {
             console.error('Photo compress error:', err);
@@ -798,7 +836,7 @@ function updateIssueNote(itemId, idx, val) { inspectionData[itemId].issues[idx].
 async function handleIssuePhoto(itemId, idx, input) {
     for (const file of Array.from(input.files)) {
         try {
-            const compressed = await compressImage(file, 600, 0.6);
+            const compressed = await compressImage(file, 400, 0.5);
             inspectionData[itemId].issues[idx].photos.push(compressed);
         } catch(err) {
             console.error('Issue photo compress error:', err);
@@ -897,11 +935,12 @@ function startNewInspection() {
     switchPage('inspect');
 }
 
-function editInspection() {
+async function editInspection() {
     if (!currentInspection) return;
     editingInspectionId = currentInspection.id;
 
-    // Load saved data back into form
+    // Load saved data back into form (with IDB photos)
+    await _loadPhotosIntoReport(currentInspection);
     inspectionData = JSON.parse(JSON.stringify(currentInspection.data));
     housePhotos = [...(currentInspection.housePhotos || [])];
 
@@ -939,14 +978,110 @@ function highlightField(el) {
     setTimeout(() => { el.style.borderColor = ''; el.style.boxShadow = ''; }, 4000);
 }
 
-function submitInspection() {
+async function submitInspection() {
     try {
-    _submitInspectionInner();
+    await _submitInspectionInner();
     } catch(e) {
         console.error('submitInspection error:', e);
         showToast('เกิดข้อผิดพลาดในการบันทึก: ' + e.message, 'error');
     }
 }
+
+// Save inspection: strip photos to IndexedDB, keep refs in localStorage
+async function _saveInspectionSafe(report) {
+    const photoKeys = [];
+    // Save housePhotos to IDB
+    if (report.housePhotos && report.housePhotos.length) {
+        const stripped = [];
+        for (let i = 0; i < report.housePhotos.length; i++) {
+            if (typeof report.housePhotos[i] === 'string' && report.housePhotos[i].length > 1000) {
+                const key = `hp_${report.id}_${i}`;
+                await savePhotoToIDB(key, report.housePhotos[i]);
+                stripped.push(key);
+                photoKeys.push(key);
+            } else {
+                stripped.push(report.housePhotos[i]);
+            }
+        }
+        report.housePhotos = stripped;
+    }
+    // Save issue photos to IDB
+    if (report.data) {
+        Object.entries(report.data).forEach(([itemId, d]) => {
+            if (d.issues) d.issues.forEach((iss, ii) => {
+                if (iss.photos && iss.photos.length) {
+                    const stripped = [];
+                    iss.photos.forEach((src, pi) => {
+                        if (typeof src === 'string' && src.length > 1000) {
+                            const key = `ip_${report.id}_${itemId}_${ii}_${pi}`;
+                            savePhotoToIDB(key, src);
+                            stripped.push(key);
+                            photoKeys.push(key);
+                        } else {
+                            stripped.push(src);
+                        }
+                    });
+                    iss.photos = stripped;
+                }
+            });
+        });
+    }
+    // Now save to localStorage (much smaller without photos)
+    try {
+        localStorage.setItem('inspections', JSON.stringify(inspections));
+    } catch(e) {
+        console.error('localStorage quota exceeded, removing oldest inspections');
+        // Remove oldest inspections until it fits
+        while (inspections.length > 1) {
+            const removed = inspections.pop();
+            // Clean up IDB photos for removed inspection
+            if (removed && removed.id) {
+                Object.keys(removed.data || {}).forEach(itemId => {
+                    (removed.data[itemId].issues || []).forEach((iss, ii) => {
+                        (iss.photos || []).forEach((p, pi) => {
+                            if (typeof p === 'string' && p.startsWith('ip_')) deletePhotoFromIDB(p);
+                        });
+                    });
+                });
+                if (removed.housePhotos) removed.housePhotos.forEach(p => {
+                    if (typeof p === 'string' && p.startsWith('hp_')) deletePhotoFromIDB(p);
+                });
+            }
+            try {
+                localStorage.setItem('inspections', JSON.stringify(inspections));
+                break;
+            } catch(e2) { continue; }
+        }
+    }
+    // Re-insert photo base64 into report for display (in memory only)
+    await _loadPhotosIntoReport(report);
+}
+
+// Load photos from IDB back into report object (for display)
+async function _loadPhotosIntoReport(report) {
+    if (report.housePhotos) {
+        for (let i = 0; i < report.housePhotos.length; i++) {
+            if (typeof report.housePhotos[i] === 'string' && report.housePhotos[i].startsWith('hp_')) {
+                const photo = await getPhotoFromIDB(report.housePhotos[i]);
+                if (photo) report.housePhotos[i] = photo;
+            }
+        }
+    }
+    if (report.data) {
+        Object.values(report.data).forEach(d => {
+            (d.issues || []).forEach(iss => {
+                if (iss.photos) {
+                    for (let i = 0; i < iss.photos.length; i++) {
+                        if (typeof iss.photos[i] === 'string' && iss.photos[i].startsWith('ip_')) {
+                            getPhotoFromIDB(iss.photos[i]).then(p => { if (p) iss.photos[i] = p; });
+                        }
+                    }
+                }
+            });
+        });
+    }
+}
+
 function _submitInspectionInner() {
     console.log('submitInspection called', { editingInspectionId, inspectionDataKeys: Object.keys(inspectionData).length });
     const errors = [];
@@ -1024,7 +1159,8 @@ function _submitInspectionInner() {
         inspections.unshift(report);
     }
 
-    localStorage.setItem('inspections', JSON.stringify(inspections));
+    // Save with photos stripped to IndexedDB to avoid localStorage quota
+    await _saveInspectionSafe(report);
     savePropertyInfo();
     currentInspection = report;
     const wasEditing = !!editingInspectionId;
@@ -1411,9 +1547,12 @@ function deleteAllInspections() {
     showToast('ลบประวัติทั้งหมดแล้ว','success');
 }
 
-function viewHistory(id) {
+async function viewHistory(id) {
     const r = inspections.find(x=>x.id===id);
-    if (r) { currentInspection=r; generateReport(r); switchPage('report'); }
+    if (r) {
+        await _loadPhotosIntoReport(r);
+        currentInspection=r; generateReport(r); switchPage('report');
+    }
 }
 
 // ===== SETTINGS =====
@@ -1462,10 +1601,23 @@ function renderSyncStatus() {
 
 // ===== LOCAL STORAGE =====
 function saveLocal() { localStorage.setItem('inspectionData', JSON.stringify(inspectionData)); }
+async function saveHousePhotosLocal() {
+    // Save photo keys to localStorage (actual photos in IDB)
+    const keys = housePhotos.map((p, i) => {
+        if (typeof p === 'string' && p.length > 1000 && !p.startsWith('hp_')) {
+            const key = 'hp_draft_' + i + '_' + Date.now();
+            savePhotoToIDB(key, p);
+            return key;
+        }
+        return p;
+    });
+    housePhotos = keys;
+    localStorage.setItem('housePhotos', JSON.stringify(housePhotos));
+}
 function savePropertyInfo() {
     ['ownerName','address','houseType','inspectorName'].forEach(f => localStorage.setItem(f, document.getElementById(f).value));
 }
-function loadSaved() {
+async function loadSaved() {
     const d = localStorage.getItem('inspectionData');
     if (d) inspectionData = JSON.parse(d);
     ['ownerName','address','houseType','inspectorName'].forEach(f => {
@@ -1473,7 +1625,17 @@ function loadSaved() {
         if (v) document.getElementById(f).value = v;
     });
     const hp = localStorage.getItem('housePhotos');
-    if (hp) { housePhotos = JSON.parse(hp); renderHousePhotos(); }
+    if (hp) {
+        housePhotos = JSON.parse(hp);
+        // Load any IDB photo keys
+        for (let i = 0; i < housePhotos.length; i++) {
+            if (typeof housePhotos[i] === 'string' && housePhotos[i].startsWith('hp_')) {
+                const photo = await getPhotoFromIDB(housePhotos[i]);
+                if (photo) housePhotos[i] = photo;
+            }
+        }
+        renderHousePhotos();
+    }
 }
 
 // ===== API SYNC =====
@@ -2301,7 +2463,7 @@ function setReinspectStatus(itemId, status) {
 async function handleReinspectPhoto(itemId, input) {
     for (const file of Array.from(input.files)) {
         try {
-            const compressed = await compressImage(file, 600, 0.6);
+            const compressed = await compressImage(file, 400, 0.5);
             reinspectData[itemId].photos.push(compressed);
         } catch(err) {
             console.error('Reinspect photo compress error:', err);
