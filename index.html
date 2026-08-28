@@ -960,16 +960,11 @@ function generatePDF() {
                 d.issues.forEach(iss => issues.push({ section:section?.title||secId, item:ci.text, note:iss.note, photos:iss.photos||[] }));
             }
         });
-    });
+    });    const el = document.getElementById('pdfContent');
+    el.style.display = 'block';
+    el.style.position = 'absolute'; el.style.left = '0'; el.style.top = '0'; el.style.width = '210mm';
 
-    const el = document.getElementById('pdfContent');
-    el.style.position = 'absolute';
-    el.style.left = '0';
-    el.style.top = '0';
-    el.style.width = '210mm';
-
-    el.innerHTML = `
-    <div style="font-family:'IBM Plex Sans Thai',sans-serif;color:#1f2937;line-height:1.6;">
+    el.innerHTML = `<div style="font-family:'IBM Plex Sans Thai',sans-serif;color:#1f2937;line-height:1.6;">
 
     <!-- ===== COVER PAGE ===== -->
     <div style="width:210mm;min-height:297mm;padding:20mm;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);color:white;page-break-after:always;">
@@ -1132,10 +1127,10 @@ function generatePDF() {
 
     html2pdf().set(opt).from(el).save().then(() => {
         showToast('สร้าง PDF สำเร็จ! ✓','success');
-        el.style.left = '-9999px';
+        el.style.left = '-9999px'; el.style.display = 'none';
     }).catch(err => {
         showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
-        el.style.left = '-9999px';
+        el.style.left = '-9999px'; el.style.display = 'none';
     });
 }
 
@@ -2297,6 +2292,7 @@ function generateComparisonPDF() {
     }));
 
     const el = document.getElementById('pdfContent');
+    el.style.display = 'block';
     el.style.position = 'absolute'; el.style.left = '0'; el.style.top = '0'; el.style.width = '210mm';
 
     // Build photo grid pages (6 per page)
@@ -2413,7 +2409,7 @@ function generateComparisonPDF() {
 
     </div>`;
 
-    html2pdf().set({ margin:0, filename:`comparison-${originalInspection.date}-${originalInspection.ownerName}.pdf`, image:{type:'jpeg',quality:0.85}, html2canvas:{scale:2,useCORS:true,letterRendering:true}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}, pagebreak:{mode:['css','legacy']} }).from(el).save().then(() => { showToast('สร้าง PDF สำเร็จ! ✓','success'); el.style.left='-9999px'; }).catch(() => { el.style.left='-9999px'; });
+    html2pdf().set({ margin:0, filename:`comparison-${originalInspection.date}-${originalInspection.ownerName}.pdf`, image:{type:'jpeg',quality:0.85}, html2canvas:{scale:2,useCORS:true,letterRendering:true}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}, pagebreak:{mode:['css','legacy']} }).from(el).save().then(() => { showToast('สร้าง PDF สำเร็จ! ✓','success'); el.style.left='-9999px'; el.style.display='none'; }).catch(() => { el.style.left='-9999px'; el.style.display='none'; });
 }
 
 // ===== TOAST =====
