@@ -2220,7 +2220,7 @@ function startReinspection() {
 
     const issues = [];
     CHECKLIST.forEach(sec => {
-        sec.items.forEach(it => {
+        getSectionItems(sec.id).forEach(it => {
             const d = originalInspection.data[it.id];
             if (d && d.status === 'fail') {
                 issues.push({
@@ -2298,15 +2298,20 @@ function setReinspectStatus(itemId, status) {
     document.getElementById(`reDetail-${itemId}`).classList.remove('hidden');
 }
 
-function handleReinspectPhoto(itemId, input) {
-    Array.from(input.files).forEach(file => {
-        const reader = new FileReader();
-        reader.onload = e => {
-            reinspectData[itemId].photos.push(e.target.result);
-            renderReinspectPhotos(itemId);
-        };
-        reader.readAsDataURL(file);
-    });
+async function handleReinspectPhoto(itemId, input) {
+    for (const file of Array.from(input.files)) {
+        try {
+            const compressed = await compressImage(file, 600, 0.6);
+            reinspectData[itemId].photos.push(compressed);
+        } catch(err) {
+            console.error('Reinspect photo compress error:', err);
+            const reader = new FileReader();
+            reader.onload = e => reinspectData[itemId].photos.push(e.target.result);
+            reader.readAsDataURL(file);
+        }
+    }
+    renderReinspectPhotos(itemId);
+    input.value = '';
 }
 
 function renderReinspectPhotos(itemId) {
@@ -2325,6 +2330,14 @@ function removeReinspectPhoto(itemId, idx) {
 }
 
 function submitReinspection() {
+    try {
+    _submitReinspectionInner();
+    } catch(e) {
+        console.error('submitReinspection error:', e);
+        showToast('เกิดข้อผิดพลาด: ' + e.message, 'error');
+    }
+}
+function _submitReinspectionInner() {
     const unchecked = Object.values(reinspectData).filter(d => d.fixed === null).length;
     if (unchecked > 0) return showToast(`กรุณาตรวจ ${unchecked} รายการที่เหลือ`,'error');
 
