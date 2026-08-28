@@ -1068,17 +1068,18 @@ async function _loadPhotosIntoReport(report) {
         }
     }
     if (report.data) {
-        Object.values(report.data).forEach(d => {
-            (d.issues || []).forEach(iss => {
+        for (const d of Object.values(report.data)) {
+            for (const iss of (d.issues || [])) {
                 if (iss.photos) {
                     for (let i = 0; i < iss.photos.length; i++) {
                         if (typeof iss.photos[i] === 'string' && iss.photos[i].startsWith('ip_')) {
-                            getPhotoFromIDB(iss.photos[i]).then(p => { if (p) iss.photos[i] = p; });
+                            const photo = await getPhotoFromIDB(iss.photos[i]);
+                            if (photo) iss.photos[i] = photo;
                         }
                     }
                 }
-            });
-        });
+            }
+        }
     }
 }
 
