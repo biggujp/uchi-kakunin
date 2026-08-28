@@ -1082,7 +1082,7 @@ async function _loadPhotosIntoReport(report) {
     }
 }
 
-function _submitInspectionInner() {
+async function _submitInspectionInner() {
     const errors = [];
     const ownerEl = document.getElementById('ownerName');
     const addrEl = document.getElementById('address');
