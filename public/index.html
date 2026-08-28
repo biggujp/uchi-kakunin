@@ -526,8 +526,10 @@ function switchPage(id) {
         b.classList.add('text-gray-400','border-transparent');
     });
     const active = document.querySelector(`.nav-btn[data-page="${id}"]`);
-    active.classList.add('active','text-brand-600','border-brand-500');
-    active.classList.remove('text-gray-400','border-transparent');
+    if (active) {
+        active.classList.add('active','text-brand-600','border-brand-500');
+        active.classList.remove('text-gray-400','border-transparent');
+    }
     window.scrollTo({top:0,behavior:'smooth'});
 }
 
