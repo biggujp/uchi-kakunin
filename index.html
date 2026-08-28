@@ -396,11 +396,11 @@
         <div class="p-5 space-y-3">
             <div>
                 <label class="text-xs font-semibold text-gray-500 mb-1 block">API Base URL (Vercel)</label>
-                <input type="url" id="apiUrl" class="w-full px-4 py-2.5 rounded-xl border-2 border-gray-100 focus:border-violet-400 outline-none transition text-sm" placeholder="https://your-app.vercel.app/api">
+                <input type="url" id="apiUrl" class="w-full px-4 py-2.5 rounded-xl border-2 border-gray-100 focus:border-violet-400 outline-none transition text-sm" value="https://uchi-kakunin.vercel.app/api">
             </div>
             <div>
                 <label class="text-xs font-semibold text-gray-500 mb-1 block">Google Sheets ID</label>
-                <input type="text" id="sheetsId" class="w-full px-4 py-2.5 rounded-xl border-2 border-gray-100 focus:border-violet-400 outline-none transition text-sm" placeholder=" Spreadsheet ID">
+                <input type="text" id="sheetsId" class="w-full px-4 py-2.5 rounded-xl border-2 border-gray-100 focus:border-violet-400 outline-none transition text-sm" value="1gCPJF3hduCjIWnIbdJu-OKud3rpbmz5nvKY0PNe2CaM">
             </div>
             <button onclick="saveSettings()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-violet-600 text-white font-bold text-sm active:scale-[0.98] transition">
                 <i class="fas fa-save mr-1"></i> บันทึกการตั้งค่า
@@ -450,8 +450,8 @@
 <!-- ===== SCRIPTS ===== -->
 <script>
 // ===== CONFIG =====
-const API_BASE = localStorage.getItem('apiUrl') || '';
-const SHEETS_ID = localStorage.getItem('sheetsId') || '';
+const API_BASE = localStorage.getItem('apiUrl') || 'https://uchi-kakunin.vercel.app/api';
+const SHEETS_ID = localStorage.getItem('sheetsId') || '1gCPJF3hduCjIWnIbdJu-OKud3rpbmz5nvKY0PNe2CaM';
 
 // ===== CHECKLIST DATA =====
 const CHECKLIST = [
@@ -1144,8 +1144,8 @@ function viewHistory(id) {
 
 // ===== SETTINGS =====
 function loadSettings() {
-    document.getElementById('apiUrl').value = localStorage.getItem('apiUrl') || '';
-    document.getElementById('sheetsId').value = localStorage.getItem('sheetsId') || '';
+    document.getElementById('apiUrl').value = localStorage.getItem('apiUrl') || 'https://uchi-kakunin.vercel.app/api';
+    document.getElementById('sheetsId').value = localStorage.getItem('sheetsId') || '1gCPJF3hduCjIWnIbdJu-OKud3rpbmz5nvKY0PNe2CaM';
 }
 function saveSettings() {
     localStorage.setItem('apiUrl', document.getElementById('apiUrl').value.trim());
