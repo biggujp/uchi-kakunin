@@ -154,6 +154,19 @@ def log_activity(user_id, action, details=""):
         pass
 
 
+# ===== SERVE FRONTEND =====
+from flask import send_from_directory
+
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_frontend(path):
+    """serve index.html สำหรับทุก non-API route"""
+    if path.startswith("api"):
+        return jsonify({"error": "Not found"}), 404
+    pub_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "public")
+    return send_from_directory(pub_dir, "index.html")
+
+
 # ===== AUTH ROUTES =====
 
 @app.route("/api/auth/register", methods=["POST"])
