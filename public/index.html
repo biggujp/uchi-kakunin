@@ -602,7 +602,7 @@ function renderItem(item, sectionId) {
                         <i class="fas fa-xmark mr-0.5"></i> มีปัญหา
                     </button>
                     <button onclick="setStatus('${item.id}','na')" class="sbtn na px-3 py-1.5 rounded-full text-[11px] font-bold border-2 transition" id="btn-${item.id}-na">
-                        N/A
+                        <i class="fas fa-minus mr-0.5"></i> ไม่มีรายการ
                     </button>
                     ${isCustom ? `
                     <button onclick="openEditItemModal('${sectionId}','${item.id}')" class="ml-auto text-amber-400 hover:text-amber-600 transition p-1">
@@ -670,8 +670,8 @@ function updateItemUI(id) {
         renderIssues(id);
     } else if (d.status === 'na') {
         document.getElementById(`btn-${id}-na`).classList.add('bg-gray-400','border-gray-400','text-white');
-        icon.classList.add('bg-gray-300','border-gray-300');
-        icon.innerHTML = '<i class="fas fa-minus text-white text-[10px]"></i>';
+        icon.classList.add('bg-gray-400','border-gray-400');
+        icon.innerHTML = '<i class="fas fa-ban text-white text-[10px]"></i>';
         document.getElementById(`issues-${id}`).classList.add('hidden');
     } else {
         icon.innerHTML = '<i class="fas fa-minus text-gray-300 text-[10px]"></i>';
@@ -742,15 +742,15 @@ function removeIssuePhoto(itemId, issueIdx, photoIdx) {
 
 // ===== STATS =====
 function updateStats() {
-    let pass=0, fail=0, total=0;
+    let pass=0, fail=0, na=0, total=0;
     CHECKLIST.forEach(s => {
         getSectionItems(s.id).forEach(it => {
             total++;
             const st = inspectionData[it.id]?.status;
-            if (st==='pass') pass++; else if (st==='fail') fail++;
+            if (st==='pass') pass++; else if (st==='fail') fail++; else if (st==='na') na++;
         });
     });
-    const pending = total - pass - fail;
+    const pending = total - pass - fail - na;
     const checked = pass + fail;
     document.getElementById('statPass').textContent = pass;
     document.getElementById('statFail').textContent = fail;
@@ -777,10 +777,13 @@ function updateStats() {
             : 'บันทึกรายงานการตรวจ';
     }
     if (submitProgress) {
-        if (checked === 0) {
+        if (checked === 0 && na === 0) {
             submitProgress.innerHTML = '<span class="text-rose-400">⚠️ กรุณาตรวจเช็คอย่างน้อย 1 รายการ</span>';
+        } else if (checked === 0 && na > 0) {
+            submitProgress.innerHTML = `<span class="text-gray-400">เลือก N/A ${na} รายการ (ไม่มีให้ตรวจ) — กรุณาเลือก ผ่าน หรือ มีปัญหา อย่างน้อย 1 รายการ</span>`;
         } else if (checked < total) {
-            submitProgress.innerHTML = `<span class="text-amber-400">ตรวจแล้ว ${checked} จาก ${total} รายการ</span>`;
+            const naText = na > 0 ? ` · N/A ${na}` : '';
+            submitProgress.innerHTML = `<span class="text-amber-400">ตรวจแล้ว ${checked} จาก ${total} รายการ${naText}</span>`;
         } else {
             submitProgress.innerHTML = '<span class="text-emerald-500">✅ ตรวจครบทุกรายการ</span>';
         }
@@ -825,10 +828,9 @@ function submitInspection() {
         highlightField(dateEl);
     }
 
-    const checked = Object.values(inspectionData).filter(d => d.status !== null).length;
-    const total = Object.keys(inspectionData).length;
-    if (checked === 0) {
-        errors.push('❌ ยังไม่ได้ตรวจเช็ครายการใดเลย (ต้องตรวจอย่างน้อย 1 รายการ)');
+    const checkedItems = Object.values(inspectionData).filter(d => d.status === 'pass' || d.status === 'fail').length;
+    if (checkedItems === 0) {
+        errors.push('❌ ยังไม่ได้ตรวจเช็ครายการใดเลย\nกรุณาเลือก ผ่าน หรือ มีปัญหา อย่างน้อย 1 รายการ');
     }
 
     if (errors.length > 0) {
@@ -894,7 +896,7 @@ function generateReport(r) {
             <div class="grid grid-cols-3 gap-3">
                 <div class="bg-emerald-50 rounded-xl p-3 text-center"><div class="text-2xl font-extrabold text-emerald-600">${pass}</div><div class="text-[10px] font-semibold text-emerald-500">ผ่าน</div></div>
                 <div class="bg-rose-50 rounded-xl p-3 text-center"><div class="text-2xl font-extrabold text-rose-600">${fail}</div><div class="text-[10px] font-semibold text-rose-500">ปัญหา</div></div>
-                <div class="bg-gray-50 rounded-xl p-3 text-center"><div class="text-2xl font-extrabold text-gray-400">${na}</div><div class="text-[10px] font-semibold text-gray-400">N/A</div></div>
+                <div class="bg-gray-50 rounded-xl p-3 text-center"><div class="text-2xl font-extrabold text-gray-400">${na}</div><div class="text-[10px] font-semibold text-gray-400">ไม่มีรายการ</div></div>
             </div>
         </div>
     </div>`;
@@ -948,7 +950,7 @@ function generateReport(r) {
             const d = r.data[it.id];
             if (d?.status) {
                 has = true;
-                const label = d.status==='pass'?'ผ่าน':d.status==='fail'?'มีปัญหา':'N/A';
+                const label = d.status==='pass'?'ผ่าน':d.status==='fail'?'มีปัญหา':'ไม่มีรายการ';
                 const cls = d.status==='pass'?'emerald':d.status==='fail'?'rose':'gray';
                 sh += `<div class="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
                     <div class="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 bg-${cls}-500">
