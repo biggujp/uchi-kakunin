@@ -314,8 +314,9 @@
     <div id="checklistContainer" class="space-y-3"></div>
 
     <!-- Submit -->
-    <button onclick="submitInspection()" class="w-full mt-4 py-3.5 rounded-2xl bg-gradient-to-r from-brand-500 via-brand-600 to-violet-600 text-white font-bold text-sm shadow-lg shadow-brand-500/25 active:scale-[0.98] transition flex items-center justify-center gap-2">
-        <i class="fas fa-paper-plane"></i> บันทึกรายงานการตรวจ
+    <div id="submitProgress" class="mt-3 text-center text-xs text-gray-400"></div>
+    <button onclick="submitInspection()" class="w-full mt-2 py-3.5 rounded-2xl bg-gradient-to-r from-brand-500 via-brand-600 to-violet-600 text-white font-bold text-sm shadow-lg shadow-brand-500/25 active:scale-[0.98] transition flex items-center justify-center gap-2">
+        <i class="fas fa-paper-plane"></i> <span id="submitBtnText">บันทึกรายงานการตรวจ</span>
     </button>
 </div>
 
@@ -766,6 +767,24 @@ function updateStats() {
         badge.textContent = `${sp}/${allItems.length}`;
         badge.className = `sec-badge text-[10px] font-bold px-2 py-0.5 rounded-full ${sp===allItems.length && allItems.length>0 ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-400'}`;
     });
+
+    // Update submit button progress
+    const submitBtnText = document.getElementById('submitBtnText');
+    const submitProgress = document.getElementById('submitProgress');
+    if (submitBtnText) {
+        submitBtnText.textContent = checked > 0
+            ? `บันทึกรายงาน (${checked}/${total} รายการ)`
+            : 'บันทึกรายงานการตรวจ';
+    }
+    if (submitProgress) {
+        if (checked === 0) {
+            submitProgress.innerHTML = '<span class="text-rose-400">⚠️ กรุณาตรวจเช็คอย่างน้อย 1 รายการ</span>';
+        } else if (checked < total) {
+            submitProgress.innerHTML = `<span class="text-amber-400">ตรวจแล้ว ${checked} จาก ${total} รายการ</span>`;
+        } else {
+            submitProgress.innerHTML = '<span class="text-emerald-500">✅ ตรวจครบทุกรายการ</span>';
+        }
+    }
 }
 
 // ===== TOGGLE SECTION =====
@@ -778,13 +797,47 @@ function toggleSection(id) {
 }
 
 // ===== SUBMIT =====
+function highlightField(el) {
+    el.style.borderColor = '#ef4444';
+    el.style.boxShadow = '0 0 0 3px rgba(239,68,68,0.15)';
+    setTimeout(() => { el.style.borderColor = ''; el.style.boxShadow = ''; }, 4000);
+}
+
 function submitInspection() {
-    const owner = document.getElementById('ownerName').value.trim();
-    const addr = document.getElementById('address').value.trim();
-    if (!owner || !addr) return showToast('กรุณากรอกชื่อเจ้าของบ้านและที่อยู่','error');
+    const errors = [];
+    const ownerEl = document.getElementById('ownerName');
+    const addrEl = document.getElementById('address');
+    const dateEl = document.getElementById('inspectionDate');
+    const owner = ownerEl.value.trim();
+    const addr = addrEl.value.trim();
+    const date = dateEl.value;
+
+    if (!owner) {
+        errors.push('❌ ชื่อเจ้าของบ้าน');
+        highlightField(ownerEl);
+    }
+    if (!addr) {
+        errors.push('❌ ที่อยู่ทรัพย์สิน');
+        highlightField(addrEl);
+    }
+    if (!date) {
+        errors.push('❌ วันที่ตรวจ');
+        highlightField(dateEl);
+    }
 
     const checked = Object.values(inspectionData).filter(d => d.status !== null).length;
-    if (checked === 0) return showToast('กรุณาตรวจเช็คอย่างน้อย 1 รายการ','error');
+    const total = Object.keys(inspectionData).length;
+    if (checked === 0) {
+        errors.push('❌ ยังไม่ได้ตรวจเช็ครายการใดเลย (ต้องตรวจอย่างน้อย 1 รายการ)');
+    }
+
+    if (errors.length > 0) {
+        showToast('กรุณากรอกข้อมูลให้ครบ:\n' + errors.join('\n'), 'error');
+        if (!owner) ownerEl.focus();
+        else if (!addr) addrEl.focus();
+        else if (!date) dateEl.focus();
+        return;
+    }
 
     const report = {
         id: Date.now(),
@@ -2371,10 +2424,13 @@ function showToast(msg, type='') {
     const t = document.createElement('div');
     const icons = {success:'fa-circle-check',error:'fa-circle-exclamation', '':'fa-circle-info'};
     const colors = {success:'bg-emerald-500',error:'bg-rose-500', '':'bg-gray-700'};
-    t.className = `${colors[type]||colors['']} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 text-sm font-medium anim-slide-up`;
-    t.innerHTML = `<i class="fas ${icons[type]||icons['']}"></i> ${msg}`;
+    t.className = `${colors[type]||colors['']} text-white px-4 py-3 rounded-xl shadow-lg flex items-start gap-2 text-sm font-medium anim-slide-up max-w-sm`;
+    const iconHtml = `<i class="fas ${icons[type]||icons['']} mt-0.5 flex-shrink-0"></i>`;
+    const textHtml = msg.replace(/\n/g, '<br>');
+    t.innerHTML = `${iconHtml}<span style="white-space:normal;">${textHtml}</span>`;
     w.appendChild(t);
-    setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity 0.3s'; setTimeout(()=>t.remove(),300); }, 2500);
+    const dur = type === 'error' && msg.includes('\n') ? 5000 : 3000;
+    setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity 0.3s'; setTimeout(()=>t.remove(),300); }, dur);
 }
 
 // ===== INIT =====
