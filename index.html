@@ -933,7 +933,8 @@ function generateReport(r) {
     c.innerHTML = html;
 }
 
-// ===== PDF GENERATION =====function generatePDF() {
+// ===== PDF GENERATION =====
+function generatePDF() {
     if (!currentInspection) return showToast('ไม่มีรายงานให้ Export','error');
 
     const r = currentInspection;
