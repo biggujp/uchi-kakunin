@@ -214,7 +214,7 @@
 <!-- ===== NAV TABS ===== -->
 <nav class="no-print sticky top-[60px] z-40 glass border-b border-white/30">
     <div class="max-w-2xl mx-auto flex">
-        <button class="nav-btn active flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-semibold transition border-b-[3px]" data-page="inspect" onclick="editingInspectionId=null;document.getElementById('editModeBanner').classList.add('hidden');switchPage('inspect')">
+        <button class="nav-btn active flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-semibold transition border-b-[3px]" data-page="inspect" onclick="startNewInspection()">
             <i class="fas fa-clipboard-check text-lg"></i>ตรวจเช็ค
         </button>
         <button class="nav-btn flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-semibold transition border-b-[3px] border-transparent text-gray-400" data-page="report" onclick="switchPage('report')">
@@ -774,12 +774,16 @@ function updateStats() {
 
     // Section badges
     CHECKLIST.forEach(sec => {
-        let sp=0;
+        let sp=0, sf=0, sn=0;
         const allItems = getSectionItems(sec.id);
-        allItems.forEach(it => { if(inspectionData[it.id]?.status) sp++; });
+        allItems.forEach(it => { 
+            const st = inspectionData[it.id]?.status;
+            if(st==='pass') sp++; else if(st==='fail') sf++; else if(st==='na') sn++; 
+        });
+        const sectionChecked = sp + sf;
         const badge = document.getElementById(`secBadge-${sec.id}`);
-        badge.textContent = `${sp}/${allItems.length}`;
-        badge.className = `sec-badge text-[10px] font-bold px-2 py-0.5 rounded-full ${sp===allItems.length && allItems.length>0 ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-400'}`;
+        badge.textContent = `${sectionChecked}/${allItems.length}`;
+        badge.className = `sec-badge text-[10px] font-bold px-2 py-0.5 rounded-full ${sectionChecked===allItems.length && allItems.length>0 ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-400'}`;
     });
 
     // Update submit button progress
@@ -815,6 +819,21 @@ function toggleSection(id) {
 
 // ===== EDIT MODE =====
 let editingInspectionId = null;
+
+function startNewInspection() {
+    editingInspectionId = null;
+    document.getElementById('editModeBanner').classList.add('hidden');
+    // Reset inspectionData for new inspection
+    inspectionData = {};
+    // Re-init default items
+    CHECKLIST.forEach(sec => {
+        getSectionItems(sec.id).forEach(it => {
+            if (!inspectionData[it.id]) inspectionData[it.id] = { status: null, issues: [] };
+        });
+    });
+    renderChecklist();
+    switchPage('inspect');
+}
 
 function editInspection() {
     if (!currentInspection) return;
@@ -935,6 +954,7 @@ function submitInspection() {
     localStorage.setItem('inspections', JSON.stringify(inspections));
     savePropertyInfo();
     currentInspection = report;
+    const wasEditing = !!editingInspectionId;
     editingInspectionId = null; // reset edit mode
     document.getElementById('editModeBanner').classList.add('hidden');
     generateReport(report);
@@ -942,7 +962,7 @@ function submitInspection() {
     // Sync to API (online or queue for offline)
     syncToAPI(report);
 
-    const msg = editingInspectionId
+    const msg = wasEditing
         ? 'แก้ไขรายการสำเร็จ! ✓'
         : (isOnline ? 'บันทึกรายงานสำเร็จ! ✓' : 'บันทึกลงเครื่อง - จะซิงค์เมื่อมีสัญญาณ 📡');
     showToast(msg, 'success');
