@@ -933,14 +933,12 @@ function generateReport(r) {
     c.innerHTML = html;
 }
 
-// ===== PDF GENERATION =====
-function generatePDF() {
+// ===== PDF GENERATION =====function generatePDF() {
     if (!currentInspection) return showToast('ไม่มีรายงานให้ Export','error');
-    showToast('กำลังสร้าง PDF...','');
 
     const r = currentInspection;
     let pass=0,fail=0,na=0;
-    Object.values(r.data).forEach(d => { if(d.status==='pass')pass++; else if(d.status==='fail')fail++; else if(d.status==='na')na++; });
+    Object.values(r.data).forEach(d=>{if(d.status==='pass')pass++;else if(d.status==='fail')fail++;else if(d.status==='na')na++;});
     const total = pass+fail+na;
 
     // Collect issues
@@ -960,13 +958,14 @@ function generatePDF() {
                 d.issues.forEach(iss => issues.push({ section:section?.title||secId, item:ci.text, note:iss.note, photos:iss.photos||[] }));
             }
         });
-    });    const el = document.getElementById('pdfContent');
-    el.style.cssText = 'display:block !important; position:fixed !important; left:0 !important; top:0 !important; width:794px !important; z-index:99999; background:white;';
-
-    el.innerHTML = `<div style="font-family:'IBM Plex Sans Thai',sans-serif;color:#1f2937;line-height:1.6;">
+    });    const printWin = window.open('','_blank','width=794,height=1123');
+    printWin.document.write(`<html><head><title>รายงานตรวจเช็คบ้าน</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>@page{size:A4;margin:0}body{margin:0;font-family:'IBM Plex Sans Thai',sans-serif;color:#1f2937;line-height:1.6;-webkit-print-color-adjust:exact;print-color-adjust:exact}img{max-width:100%}</style>
+    </head><body>
 
     <!-- ===== COVER PAGE ===== -->
-    <div style="width:794px;min-height:1123px;padding:56px;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);color:white;">
+    <div style="width:210mm;min-height:297mm;padding:20mm;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);color:white;page-break-after:always;">
         <div style="text-align:center;">
             <div style="width:100px;height:100px;margin:0 auto 20px;background:rgba(255,255,255,0.15);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:48px;">🏠</div>
             <h1 style="font-size:36px;font-weight:800;margin-bottom:6px;letter-spacing:-0.5px;">รายงานตรวจเช็คบ้าน</h1>
@@ -1028,7 +1027,7 @@ function generatePDF() {
                 pages.push(issues.slice(i, i + ITEMS_PER_PAGE));
             }
             return pages.map((pageItems, pageIdx) => `
-                <div style="margin-bottom:16px;">
+                <div style="${pageIdx>0?'page-break-before:always;':''}margin-bottom:16px;">
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                         ${pageItems.map((iss, i) => {
                             const globalIdx = pageIdx * ITEMS_PER_PAGE + i;
@@ -1055,7 +1054,7 @@ function generatePDF() {
     </div>
 
     <!-- ===== SIGNATURE PAGE ===== -->
-    <div style="width:794px;padding:56px;min-height:1123px;display:flex;flex-direction:column;justify-content:space-between;">
+    <div style="width:210mm;padding:20mm;min-height:297mm;display:flex;flex-direction:column;justify-content:space-between;">
         <div>
             <h2 style="font-size:22px;font-weight:700;color:#2563eb;margin-bottom:20px;border-bottom:3px solid #2563eb;padding-bottom:8px;">📝 ลงลายมือชื่อ</h2>
             <p style="font-size:14px;color:#6b7280;margin-bottom:40px;">ข้าพเจ้าได้ทำการตรวจเช็คทรัพย์สินดังกล่าวข้างต้นด้วยความเรียบร้อย</p>
@@ -1077,27 +1076,10 @@ function generatePDF() {
         </div>
     </div>
 
-    </div>`;
-
-    // Generate PDF
-    const opt = {
-        margin: 0,
-        filename: `inspection-report-${r.date}-${r.ownerName}.pdf`,
-        image: { type:'jpeg', quality:0.85 },
-        html2canvas: { scale:2, useCORS:true, letterRendering:true },
-        jsPDF: { unit:'mm', format:'a4', orientation:'portrait' }
-    };
-
-    // Use requestAnimationFrame to ensure element is rendered before capture
-    requestAnimationFrame(() => {
-        html2pdf().set(opt).from(el).save().then(() => {
-            showToast('สร้าง PDF สำเร็จ! ✓','success');
-            el.style.cssText = 'display:none !important;';
-        }).catch(err => {
-            showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
-            el.style.cssText = 'display:none !important;';
-        });
-    });
+    </body></html>`);
+    printWin.document.close();
+    setTimeout(() => { printWin.print(); }, 800);
+    showToast('เปิดหน้าต่างพิมพ์แล้ว - เลือก Save as PDF','success');
 }
 
 // ===== HISTORY =====
@@ -2257,19 +2239,20 @@ function generateComparisonPDF() {
         }
     }));
 
-    const el = document.getElementById('pdfContent');
-    el.style.cssText = 'display:block !important; position:fixed !important; left:0 !important; top:0 !important; width:794px !important; z-index:99999; background:white;';
-
     const ITEMS_PER_PAGE = 6;
     const pages = [];
     for (let i = 0; i < issueItems.length; i += ITEMS_PER_PAGE) {
         pages.push(issueItems.slice(i, i + ITEMS_PER_PAGE));
     }
 
-    el.innerHTML = `<div style="font-family:'IBM Plex Sans Thai',sans-serif;color:#1f2937;line-height:1.6;">
+    const printWin = window.open('','_blank','width=794,height=1123');
+    printWin.document.write(`<html><head><title>รายงานเปรียบเทียบ</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>@page{size:A4;margin:0}body{margin:0;font-family:'IBM Plex Sans Thai',sans-serif;color:#1f2937;line-height:1.6;-webkit-print-color-adjust:exact;print-color-adjust:exact}img{max-width:100%}</style>
+    </head><body>
 
     <!-- ===== COVER PAGE ===== -->
-    <div style="width:794px;min-height:1123px;padding:56px;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(135deg,#f59e0b 0%,#ea580c 100%);color:white;">
+    <div style="width:210mm;min-height:297mm;padding:20mm;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(135deg,#f59e0b 0%,#ea580c 100%);color:white;page-break-after:always;">
         <div style="text-align:center;">
             <div style="width:100px;height:100px;margin:0 auto 20px;background:rgba(255,255,255,0.15);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:48px;">🔍</div>
             <h1 style="font-size:32px;font-weight:800;margin-bottom:6px;">รายงานเปรียบเทียบ</h1>
@@ -2292,7 +2275,7 @@ function generateComparisonPDF() {
     </div>
 
     <!-- ===== SUMMARY PAGE ===== -->
-    <div style="width:794px;padding:42px 56px;">
+    <div style="width:210mm;padding:15mm 20mm;page-break-after:always;">
         <h2 style="font-size:20px;font-weight:700;color:#ea580c;margin-bottom:16px;border-bottom:3px solid #ea580c;padding-bottom:8px;">📊 สรุปผลการเปรียบเทียบ</h2>
         <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px;">
             <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;width:30%;font-weight:600;">เจ้าของบ้าน</td><td style="padding:8px;border:1px solid #e5e7eb;">${originalInspection.ownerName}</td></tr>
@@ -2309,7 +2292,7 @@ function generateComparisonPDF() {
 
     <!-- ===== PHOTO GRID PAGES ===== -->
     ${pages.map((pageItems, pageIdx) => `
-    <div style="width:794px;padding:42px 56px;">
+    <div style="width:210mm;padding:15mm 20mm;${pageIdx>0?'page-break-before:always;':''}page-break-after:always;">
         <h2 style="font-size:18px;font-weight:700;color:#ea580c;margin-bottom:12px;border-bottom:2px solid #ea580c;padding-bottom:6px;">🔍 รายละเอียดเปรียบเทียบ (${pageIdx*ITEMS_PER_PAGE+1}-${Math.min((pageIdx+1)*ITEMS_PER_PAGE, issueItems.length)} จาก ${issueItems.length})</h2>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
             ${pageItems.map((iss, i) => {
@@ -2349,7 +2332,7 @@ function generateComparisonPDF() {
     `).join('')}
 
     <!-- ===== SIGNATURE PAGE ===== -->
-    <div style="width:794px;padding:56px;min-height:1123px;display:flex;flex-direction:column;justify-content:space-between;">
+    <div style="width:210mm;padding:20mm;min-height:297mm;display:flex;flex-direction:column;justify-content:space-between;">
         <div>
             <h2 style="font-size:22px;font-weight:700;color:#ea580c;margin-bottom:20px;border-bottom:3px solid #ea580c;padding-bottom:8px;">📝 ลงลายมือชื่อ</h2>
             <p style="font-size:14px;color:#6b7280;margin-bottom:40px;">ข้าพเจ้าได้ทำการตรวจสอบการแก้ไขดังกล่าวข้างต้นด้วยความเรียบร้อย</p>
@@ -2371,11 +2354,10 @@ function generateComparisonPDF() {
         </div>
     </div>
 
-    </div>`;
-
-    requestAnimationFrame(() => {
-        html2pdf().set({ margin:0, filename:`comparison-${originalInspection.date}-${originalInspection.ownerName}.pdf`, image:{type:'jpeg',quality:0.85}, html2canvas:{scale:2,useCORS:true,letterRendering:true}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'} }).from(el).save().then(() => { showToast('สร้าง PDF สำเร็จ! ✓','success'); el.style.cssText='display:none !important;'; }).catch(() => { el.style.cssText='display:none !important;'; });
-    });
+    </body></html>`);
+    printWin.document.close();
+    setTimeout(() => { printWin.print(); }, 800);
+    showToast('เปิดหน้าต่างพิมพ์แล้ว - เลือก Save as PDF','success');
 }
 
 // ===== TOAST =====
