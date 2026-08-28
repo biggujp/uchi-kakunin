@@ -961,13 +961,12 @@ function generatePDF() {
             }
         });
     });    const el = document.getElementById('pdfContent');
-    el.style.display = 'block';
-    el.style.position = 'absolute'; el.style.left = '0'; el.style.top = '0'; el.style.width = '210mm';
+    el.style.cssText = 'display:block !important; position:fixed !important; left:0 !important; top:0 !important; width:794px !important; z-index:99999; background:white;';
 
     el.innerHTML = `<div style="font-family:'IBM Plex Sans Thai',sans-serif;color:#1f2937;line-height:1.6;">
 
     <!-- ===== COVER PAGE ===== -->
-    <div style="width:210mm;min-height:297mm;padding:20mm;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);color:white;page-break-after:always;">
+    <div style="width:794px;min-height:1123px;padding:56px;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);color:white;">
         <div style="text-align:center;">
             <div style="width:100px;height:100px;margin:0 auto 20px;background:rgba(255,255,255,0.15);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:48px;">🏠</div>
             <h1 style="font-size:36px;font-weight:800;margin-bottom:6px;letter-spacing:-0.5px;">รายงานตรวจเช็คบ้าน</h1>
@@ -989,10 +988,8 @@ function generatePDF() {
             </div>
             ` : ''}
         </div>
-    </div>
-
-    <!-- ===== SUMMARY PAGE ===== -->
-    <div style="width:210mm;padding:15mm 20mm;page-break-after:always;">
+    </div>    <!-- ===== SUMMARY PAGE ===== -->
+    <div style="width:794px;padding:42px 56px;">
         <h2 style="font-size:22px;font-weight:700;color:#2563eb;margin-bottom:20px;border-bottom:3px solid #2563eb;padding-bottom:8px;">📊 สรุปผลการตรวจ</h2>
         <table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:14px;">
             <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;width:30%;font-weight:600;">วันที่ตรวจ</td><td style="padding:8px;border:1px solid #e5e7eb;">${r.date}</td></tr>
@@ -1004,6 +1001,7 @@ function generatePDF() {
 
         <!-- House Photos -->
         ${r.housePhotos?.length ? `<div style="margin-bottom:20px;"><h3 style="font-size:16px;font-weight:600;margin-bottom:10px;">📸 รูปหน้าบ้าน</h3><div style="display:flex;flex-wrap:wrap;gap:8px;">${r.housePhotos.map(src=>`<img src="${src}" style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:2px solid #e5e7eb;">`).join('')}</div></div>` : ''}
+
 
         <!-- Stats -->
         <div style="display:flex;gap:12px;margin-bottom:20px;">
@@ -1021,17 +1019,16 @@ function generatePDF() {
             </div>
         </div>
 
-    ${issues.length ? `
+        ${issues.length ? `
         <h3 style="font-size:16px;font-weight:600;color:#e11d48;margin-bottom:12px;">⚠️ จุดที่ต้องแก้ไข (${issues.length} รายการ)</h3>
         ${(() => {
-            // Group issues into pages of 6 (2 columns x 3 rows)
             const ITEMS_PER_PAGE = 6;
             const pages = [];
             for (let i = 0; i < issues.length; i += ITEMS_PER_PAGE) {
                 pages.push(issues.slice(i, i + ITEMS_PER_PAGE));
             }
             return pages.map((pageItems, pageIdx) => `
-                <div style="${pageIdx > 0 ? 'page-break-before:always;' : ''}margin-bottom:16px;">
+                <div style="margin-bottom:16px;">
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                         ${pageItems.map((iss, i) => {
                             const globalIdx = pageIdx * ITEMS_PER_PAGE + i;
@@ -1039,7 +1036,7 @@ function generatePDF() {
                                 ? iss.photos.map(src=>`<img src="${src}" style="width:100%;height:140px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;">`).join('')
                                 : '<div style="width:100%;height:140px;background:#f3f4f6;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px;">ไม่มีรูปภาพ</div>';
                             return `
-                            <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;page-break-inside:avoid;">
+                            <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
                                 <div style="background:#fff1f2;padding:4px 8px;display:flex;align-items:center;gap:6px;">
                                     <span style="background:#e11d48;color:white;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">#${globalIdx+1}</span>
                                     <span style="font-size:10px;color:#9ca3af;">${iss.section}</span>
@@ -1057,41 +1054,8 @@ function generatePDF() {
         })()}` : '<div style="text-align:center;padding:30px;background:#ecfdf5;border-radius:12px;"><p style="font-size:18px;font-weight:700;color:#059669;">✅ ผ่านทุกรายการ ไม่มีปัญหา!</p></div>'}
     </div>
 
-    <!-- ===== DETAIL PAGES ===== -->
-    <div style="width:210mm;padding:15mm 20mm;page-break-after:always;">
-        <h2 style="font-size:22px;font-weight:700;color:#2563eb;margin-bottom:20px;border-bottom:3px solid #2563eb;padding-bottom:8px;">📋 รายละเอียดผลการตรวจ</h2>
-        ${CHECKLIST.map(sec => {
-            let rows = '';
-            sec.items.forEach(it => {
-                const d = r.data[it.id];
-                if (!d?.status) return;
-                const label = d.status==='pass'?'ผ่าน':d.status==='fail'?'มีปัญหา':'N/A';
-                const bg = d.status==='pass'?'#ecfdf5':d.status==='fail'?'#fff1f2':'#f3f4f6';
-                const fg = d.status==='pass'?'#059669':d.status==='fail'?'#e11d48':'#9ca3af';
-                let detail = '';
-                if (d.status==='fail' && d.issues?.length) {
-                    detail = d.issues.map(is => {
-                        let ph = is.photos?.length ? `<div style="margin-top:4px;">${is.photos.map(src=>`<img src="${src}" style="width:50px;height:50px;object-fit:cover;border-radius:4px;display:inline-block;margin:2px;">`).join('')}</div>` : '';
-                        return `<div style="margin-bottom:4px;"><span style="color:#e11d48;font-size:12px;">• ${is.note||'ไม่มีรายละเอียด'}</span>${ph}</div>`;
-                    }).join('');
-                }
-                rows += `<tr>
-                    <td style="padding:8px;border:1px solid #e5e7eb;font-weight:500;font-size:13px;">${it.text}</td>
-                    <td style="padding:8px;border:1px solid #e5e7eb;background:${bg};text-align:center;font-weight:700;color:${fg};font-size:12px;">${label}</td>
-                    <td style="padding:8px;border:1px solid #e5e7eb;font-size:12px;">${detail||'-'}</td>
-                </tr>`;
-            });
-            if (!rows) return '';
-            return `<h3 style="font-size:15px;font-weight:600;margin:16px 0 8px;color:#374151;">${sec.title}</h3>
-            <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px;">
-                <thead><tr style="background:#f9fafb;"><th style="padding:8px;border:1px solid #e5e7eb;text-align:left;width:35%;">รายการ</th><th style="padding:8px;border:1px solid #e5e7eb;text-align:center;width:15%;">ผลลัพธ์</th><th style="padding:8px;border:1px solid #e5e7eb;text-align:left;width:50%;">รายละเอียด / รูปภาพ</th></tr></thead>
-                <tbody>${rows}</tbody>
-            </table>`;
-        }).join('')}
-    </div>
-
     <!-- ===== SIGNATURE PAGE ===== -->
-    <div style="width:210mm;padding:20mm;min-height:297mm;display:flex;flex-direction:column;justify-content:space-between;">
+    <div style="width:794px;padding:56px;min-height:1123px;display:flex;flex-direction:column;justify-content:space-between;">
         <div>
             <h2 style="font-size:22px;font-weight:700;color:#2563eb;margin-bottom:20px;border-bottom:3px solid #2563eb;padding-bottom:8px;">📝 ลงลายมือชื่อ</h2>
             <p style="font-size:14px;color:#6b7280;margin-bottom:40px;">ข้าพเจ้าได้ทำการตรวจเช็คทรัพย์สินดังกล่าวข้างต้นด้วยความเรียบร้อย</p>
@@ -1121,16 +1085,18 @@ function generatePDF() {
         filename: `inspection-report-${r.date}-${r.ownerName}.pdf`,
         image: { type:'jpeg', quality:0.85 },
         html2canvas: { scale:2, useCORS:true, letterRendering:true },
-        jsPDF: { unit:'mm', format:'a4', orientation:'portrait' },
-        pagebreak: { mode:['css','legacy'] }
+        jsPDF: { unit:'mm', format:'a4', orientation:'portrait' }
     };
 
-    html2pdf().set(opt).from(el).save().then(() => {
-        showToast('สร้าง PDF สำเร็จ! ✓','success');
-        el.style.left = '-9999px'; el.style.display = 'none';
-    }).catch(err => {
-        showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
-        el.style.left = '-9999px'; el.style.display = 'none';
+    // Use requestAnimationFrame to ensure element is rendered before capture
+    requestAnimationFrame(() => {
+        html2pdf().set(opt).from(el).save().then(() => {
+            showToast('สร้าง PDF สำเร็จ! ✓','success');
+            el.style.cssText = 'display:none !important;';
+        }).catch(err => {
+            showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+            el.style.cssText = 'display:none !important;';
+        });
     });
 }
 
@@ -2292,10 +2258,8 @@ function generateComparisonPDF() {
     }));
 
     const el = document.getElementById('pdfContent');
-    el.style.display = 'block';
-    el.style.position = 'absolute'; el.style.left = '0'; el.style.top = '0'; el.style.width = '210mm';
+    el.style.cssText = 'display:block !important; position:fixed !important; left:0 !important; top:0 !important; width:794px !important; z-index:99999; background:white;';
 
-    // Build photo grid pages (6 per page)
     const ITEMS_PER_PAGE = 6;
     const pages = [];
     for (let i = 0; i < issueItems.length; i += ITEMS_PER_PAGE) {
@@ -2305,7 +2269,7 @@ function generateComparisonPDF() {
     el.innerHTML = `<div style="font-family:'IBM Plex Sans Thai',sans-serif;color:#1f2937;line-height:1.6;">
 
     <!-- ===== COVER PAGE ===== -->
-    <div style="width:210mm;min-height:297mm;padding:20mm;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(135deg,#f59e0b 0%,#ea580c 100%);color:white;page-break-after:always;">
+    <div style="width:794px;min-height:1123px;padding:56px;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(135deg,#f59e0b 0%,#ea580c 100%);color:white;">
         <div style="text-align:center;">
             <div style="width:100px;height:100px;margin:0 auto 20px;background:rgba(255,255,255,0.15);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:48px;">🔍</div>
             <h1 style="font-size:32px;font-weight:800;margin-bottom:6px;">รายงานเปรียบเทียบ</h1>
@@ -2328,7 +2292,7 @@ function generateComparisonPDF() {
     </div>
 
     <!-- ===== SUMMARY PAGE ===== -->
-    <div style="width:210mm;padding:15mm 20mm;page-break-after:always;">
+    <div style="width:794px;padding:42px 56px;">
         <h2 style="font-size:20px;font-weight:700;color:#ea580c;margin-bottom:16px;border-bottom:3px solid #ea580c;padding-bottom:8px;">📊 สรุปผลการเปรียบเทียบ</h2>
         <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px;">
             <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;width:30%;font-weight:600;">เจ้าของบ้าน</td><td style="padding:8px;border:1px solid #e5e7eb;">${originalInspection.ownerName}</td></tr>
@@ -2345,7 +2309,7 @@ function generateComparisonPDF() {
 
     <!-- ===== PHOTO GRID PAGES ===== -->
     ${pages.map((pageItems, pageIdx) => `
-    <div style="width:210mm;padding:15mm 20mm;${pageIdx>0?'page-break-before:always;':''}page-break-after:always;">
+    <div style="width:794px;padding:42px 56px;">
         <h2 style="font-size:18px;font-weight:700;color:#ea580c;margin-bottom:12px;border-bottom:2px solid #ea580c;padding-bottom:6px;">🔍 รายละเอียดเปรียบเทียบ (${pageIdx*ITEMS_PER_PAGE+1}-${Math.min((pageIdx+1)*ITEMS_PER_PAGE, issueItems.length)} จาก ${issueItems.length})</h2>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
             ${pageItems.map((iss, i) => {
@@ -2357,7 +2321,7 @@ function generateComparisonPDF() {
                     ? iss.rePhotos.slice(0,2).map(s=>`<img src="${s}" style="width:100%;height:80px;object-fit:cover;border-radius:4px;border:1px solid #d1fae5;">`).join('')
                     : '<div style="width:100%;height:40px;background:#ecfdf5;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#6ee7b7;font-size:9px;">ไม่มีรูปใหม่</div>';
                 return `
-                <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;page-break-inside:avoid;">
+                <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
                     <div style="background:${iss.isFixed?'#ecfdf5':'#fff1f2'};padding:4px 8px;display:flex;align-items:center;gap:6px;">
                         <span style="background:${iss.isFixed?'#059669':'#e11d48'};color:white;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">#${globalIdx+1}</span>
                         <span style="font-size:10px;color:#9ca3af;">${iss.section}</span>
@@ -2385,7 +2349,7 @@ function generateComparisonPDF() {
     `).join('')}
 
     <!-- ===== SIGNATURE PAGE ===== -->
-    <div style="width:210mm;padding:20mm;min-height:297mm;display:flex;flex-direction:column;justify-content:space-between;">
+    <div style="width:794px;padding:56px;min-height:1123px;display:flex;flex-direction:column;justify-content:space-between;">
         <div>
             <h2 style="font-size:22px;font-weight:700;color:#ea580c;margin-bottom:20px;border-bottom:3px solid #ea580c;padding-bottom:8px;">📝 ลงลายมือชื่อ</h2>
             <p style="font-size:14px;color:#6b7280;margin-bottom:40px;">ข้าพเจ้าได้ทำการตรวจสอบการแก้ไขดังกล่าวข้างต้นด้วยความเรียบร้อย</p>
@@ -2409,7 +2373,9 @@ function generateComparisonPDF() {
 
     </div>`;
 
-    html2pdf().set({ margin:0, filename:`comparison-${originalInspection.date}-${originalInspection.ownerName}.pdf`, image:{type:'jpeg',quality:0.85}, html2canvas:{scale:2,useCORS:true,letterRendering:true}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}, pagebreak:{mode:['css','legacy']} }).from(el).save().then(() => { showToast('สร้าง PDF สำเร็จ! ✓','success'); el.style.left='-9999px'; el.style.display='none'; }).catch(() => { el.style.left='-9999px'; el.style.display='none'; });
+    requestAnimationFrame(() => {
+        html2pdf().set({ margin:0, filename:`comparison-${originalInspection.date}-${originalInspection.ownerName}.pdf`, image:{type:'jpeg',quality:0.85}, html2canvas:{scale:2,useCORS:true,letterRendering:true}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'} }).from(el).save().then(() => { showToast('สร้าง PDF สำเร็จ! ✓','success'); el.style.cssText='display:none !important;'; }).catch(() => { el.style.cssText='display:none !important;'; });
+    });
 }
 
 // ===== TOAST =====
