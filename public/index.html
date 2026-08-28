@@ -2279,84 +2279,141 @@ function generateComparisonPDF() {
     if (!r) return;
 
     let fixed = 0, notFixed = 0, total = 0;
+    const issueItems = [];
     CHECKLIST.forEach(sec => sec.items.forEach(it => {
         if (originalInspection.data[it.id]?.status === 'fail') {
             total++;
-            if (r.data[it.id]?.fixed === 'fixed') fixed++;
-            else notFixed++;
+            const re = r.data[it.id] || {};
+            const isFixed = re.fixed === 'fixed';
+            if (isFixed) fixed++; else notFixed++;
+            const origIssues = originalInspection.data[it.id]?.issues || [];
+            issueItems.push({
+                section: sec.title, item: it.text,
+                origNote: origIssues.map(is=>is.note||'-').join(', '),
+                origPhotos: origIssues.flatMap(is=>is.photos||[]),
+                isFixed, reNote: re.note||'', rePhotos: re.photos||[]
+            });
         }
     }));
 
     const el = document.getElementById('pdfContent');
     el.style.position = 'absolute'; el.style.left = '0'; el.style.top = '0'; el.style.width = '210mm';
 
-    let rows = '';
-    let idx = 0;
-    CHECKLIST.forEach(sec => sec.items.forEach(it => {
-        if (originalInspection.data[it.id]?.status !== 'fail') return;
-        idx++;
-        const re = r.data[it.id] || {};
-        const isFixed = re.fixed === 'fixed';
-        const origIssues = originalInspection.data[it.id]?.issues || [];
-        const origPhotos = origIssues.flatMap(is => is.photos || []);
-
-        rows += `<tr>
-            <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;font-weight:700;">${idx}</td>
-            <td style="padding:8px;border:1px solid #e5e7eb;font-size:12px;">${sec.title}</td>
-            <td style="padding:8px;border:1px solid #e5e7eb;font-weight:500;font-size:12px;">${it.text}</td>
-            <td style="padding:8px;border:1px solid #e5e7eb;background:#fff1f2;font-size:11px;">${origIssues.map(is=>is.note||'-').join('<br>')}${origPhotos.length ? '<div style="margin-top:4px;">' + origPhotos.map(s=>'<img src="'+s+'" style="width:40px;height:40px;object-fit:cover;border-radius:4px;display:inline-block;margin:1px;">').join('') + '</div>' : ''}</td>
-            <td style="padding:8px;border:1px solid #e5e7eb;background:${isFixed?'#ecfdf5':'#fff1f2'};text-align:center;font-weight:700;color:${isFixed?'#059669':'#e11d48'};font-size:12px;">${isFixed?'✓ แก้ไขแล้ว':'✗ ยังไม่แก้'}</td>
-            <td style="padding:8px;border:1px solid #e5e7eb;background:#ecfdf5;font-size:11px;">${re.note||'-'}${re.photos?.length ? '<div style="margin-top:4px;">' + re.photos.map(s=>'<img src="'+s+'" style="width:40px;height:40px;object-fit:cover;border-radius:4px;display:inline-block;margin:1px;">').join('') + '</div>' : ''}</td>
-        </tr>`;
-    }));
+    // Build photo grid pages (6 per page)
+    const ITEMS_PER_PAGE = 6;
+    const pages = [];
+    for (let i = 0; i < issueItems.length; i += ITEMS_PER_PAGE) {
+        pages.push(issueItems.slice(i, i + ITEMS_PER_PAGE));
+    }
 
     el.innerHTML = `<div style="font-family:'IBM Plex Sans Thai',sans-serif;color:#1f2937;line-height:1.6;">
+
+    <!-- ===== COVER PAGE ===== -->
     <div style="width:210mm;min-height:297mm;padding:20mm;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(135deg,#f59e0b 0%,#ea580c 100%);color:white;page-break-after:always;">
         <div style="text-align:center;">
-            <div style="width:100px;height:100px;margin:0 auto 30px;background:rgba(255,255,255,0.15);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:48px;">🔍</div>
-            <h1 style="font-size:32px;font-weight:800;margin-bottom:8px;">รายงานเปรียบเทียบ</h1>
-            <p style="font-size:16px;opacity:0.85;margin-bottom:10px;">Comparison Report: Round 1 vs Round 2</p>
-            <p style="font-size:14px;opacity:0.7;">Uchi Kakunin Setsubi</p>
-            <div style="background:rgba(255,255,255,0.15);border-radius:16px;padding:24px 40px;display:inline-block;text-align:left;font-size:14px;line-height:2;margin-top:30px;">
+            <div style="width:100px;height:100px;margin:0 auto 20px;background:rgba(255,255,255,0.15);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:48px;">🔍</div>
+            <h1 style="font-size:32px;font-weight:800;margin-bottom:6px;">รายงานเปรียบเทียบ</h1>
+            <p style="font-size:16px;opacity:0.85;margin-bottom:24px;">Comparison Report: Round 1 vs Round 2</p>
+            <div style="background:rgba(255,255,255,0.15);border-radius:16px;padding:20px 40px;display:inline-block;text-align:left;font-size:14px;line-height:2;">
                 <div><strong>เจ้าของ:</strong> ${originalInspection.ownerName}</div>
                 <div><strong>ที่อยู่:</strong> ${originalInspection.address}</div>
                 <div><strong>ตรวจรอบ 1:</strong> ${originalInspection.date}</div>
                 <div><strong>ตรวจรอบ 2:</strong> ${r.date}</div>
             </div>
+            ${originalInspection.housePhotos?.length ? `
+            <div style="margin-top:24px;">
+                <p style="font-size:13px;opacity:0.8;margin-bottom:10px;">📸 รูปหน้าบ้าน</p>
+                <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;">
+                    ${originalInspection.housePhotos.slice(0,4).map(src=>`<img src="${src}" style="width:120px;height:120px;object-fit:cover;border-radius:12px;border:3px solid rgba(255,255,255,0.3);">`).join('')}
+                </div>
+            </div>
+            ` : ''}
         </div>
     </div>
 
+    <!-- ===== SUMMARY PAGE ===== -->
     <div style="width:210mm;padding:15mm 20mm;page-break-after:always;">
         <h2 style="font-size:20px;font-weight:700;color:#ea580c;margin-bottom:16px;border-bottom:3px solid #ea580c;padding-bottom:8px;">📊 สรุปผลการเปรียบเทียบ</h2>
-        <div style="display:flex;gap:12px;margin-bottom:20px;">
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px;">
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;width:30%;font-weight:600;">เจ้าของบ้าน</td><td style="padding:8px;border:1px solid #e5e7eb;">${originalInspection.ownerName}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600;">ที่อยู่</td><td style="padding:8px;border:1px solid #e5e7eb;">${originalInspection.address}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600;">ตรวจรอบ 1</td><td style="padding:8px;border:1px solid #e5e7eb;">${originalInspection.date}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600;">ตรวจรอบ 2</td><td style="padding:8px;border:1px solid #e5e7eb;">${r.date}</td></tr>
+        </table>
+        <div style="display:flex;gap:12px;margin-bottom:16px;">
             <div style="flex:1;text-align:center;padding:16px;background:#ecfdf5;border-radius:12px;border:2px solid #d1fae5;"><div style="font-size:36px;font-weight:800;color:#059669;">${fixed}</div><div style="font-size:12px;color:#059669;font-weight:600;">แก้ไขแล้ว ✓</div></div>
             <div style="flex:1;text-align:center;padding:16px;background:#fff1f2;border-radius:12px;border:2px solid #fecdd3;"><div style="font-size:36px;font-weight:800;color:#e11d48;">${notFixed}</div><div style="font-size:12px;color:#e11d48;font-weight:600;">ยังไม่แก้ ✗</div></div>
             <div style="flex:1;text-align:center;padding:16px;background:#fffbeb;border-radius:12px;border:2px solid #fde68a;"><div style="font-size:36px;font-weight:800;color:#d97706;">${total>0?Math.round(fixed/total*100):0}%</div><div style="font-size:12px;color:#d97706;font-weight:600;">อัตราแก้ไข</div></div>
         </div>
-        <table style="width:100%;border-collapse:collapse;font-size:12px;">
-            <thead><tr style="background:#f9fafb;">
-                <th style="padding:8px;border:1px solid #e5e7eb;width:4%;">#</th>
-                <th style="padding:8px;border:1px solid #e5e7eb;width:12%;">หมวด</th>
-                <th style="padding:8px;border:1px solid #e5e7eb;width:18%;">รายการ</th>
-                <th style="padding:8px;border:1px solid #e5e7eb;width:25%;background:#fff1f2;">🔍 รอบ 1 - ปัญหา</th>
-                <th style="padding:8px;border:1px solid #e5e7eb;width:12%;text-align:center;">สถานะ</th>
-                <th style="padding:8px;border:1px solid #e5e7eb;width:29%;background:#ecfdf5;">✅ รอบ 2 - ผลลัพธ์</th>
-            </tr></thead>
-            <tbody>${rows}</tbody>
-        </table>
     </div>
 
-    <div style="width:210mm;padding:20mm;min-height:297mm;display:flex;flex-direction:column;justify-content:flex-end;">
-        <p style="font-size:14px;color:#6b7280;margin-bottom:40px;">ข้าพเจ้าได้ทำการตรวจสอบการแก้ไขดังกล่าวข้างต้นด้วยความเรียบร้อย</p>
-        <div style="display:flex;justify-content:space-between;gap:40px;">
-            <div style="flex:1;text-align:center;"><div style="height:80px;border-bottom:2px dashed #d1d5db;margin-bottom:8px;"></div><p style="font-size:13px;font-weight:600;">ผู้ตรวจ (${r.inspectorName||'...........'})</p></div>
-            <div style="flex:1;text-align:center;"><div style="height:80px;border-bottom:2px dashed #d1d5db;margin-bottom:8px;"></div><p style="font-size:13px;font-weight:600;">เจ้าของบ้าน (${originalInspection.ownerName})</p></div>
+    <!-- ===== PHOTO GRID PAGES ===== -->
+    ${pages.map((pageItems, pageIdx) => `
+    <div style="width:210mm;padding:15mm 20mm;${pageIdx>0?'page-break-before:always;':''}page-break-after:always;">
+        <h2 style="font-size:18px;font-weight:700;color:#ea580c;margin-bottom:12px;border-bottom:2px solid #ea580c;padding-bottom:6px;">🔍 รายละเอียดเปรียบเทียบ (${pageIdx*ITEMS_PER_PAGE+1}-${Math.min((pageIdx+1)*ITEMS_PER_PAGE, issueItems.length)} จาก ${issueItems.length})</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            ${pageItems.map((iss, i) => {
+                const globalIdx = pageIdx * ITEMS_PER_PAGE + i;
+                const origPhotoHtml = iss.origPhotos.length
+                    ? iss.origPhotos.slice(0,2).map(s=>`<img src="${s}" style="width:100%;height:80px;object-fit:cover;border-radius:4px;border:1px solid #fecdd3;">`).join('')
+                    : '<div style="width:100%;height:40px;background:#fef2f2;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fca5a5;font-size:9px;">ไม่มีรูปเดิม</div>';
+                const rePhotoHtml = iss.rePhotos.length
+                    ? iss.rePhotos.slice(0,2).map(s=>`<img src="${s}" style="width:100%;height:80px;object-fit:cover;border-radius:4px;border:1px solid #d1fae5;">`).join('')
+                    : '<div style="width:100%;height:40px;background:#ecfdf5;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#6ee7b7;font-size:9px;">ไม่มีรูปใหม่</div>';
+                return `
+                <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;page-break-inside:avoid;">
+                    <div style="background:${iss.isFixed?'#ecfdf5':'#fff1f2'};padding:4px 8px;display:flex;align-items:center;gap:6px;">
+                        <span style="background:${iss.isFixed?'#059669':'#e11d48'};color:white;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">#${globalIdx+1}</span>
+                        <span style="font-size:10px;color:#9ca3af;">${iss.section}</span>
+                        <span style="margin-left:auto;font-size:10px;font-weight:700;color:${iss.isFixed?'#059669':'#e11d48'};">${iss.isFixed?'✓ แก้ไขแล้ว':'✗ ยังไม่แก้'}</span>
+                    </div>
+                    <div style="padding:4px 6px;">
+                        <div style="font-size:11px;font-weight:600;color:#1f2937;margin-bottom:4px;">${iss.item}</div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+                            <div style="background:#fef2f2;border-radius:4px;padding:4px;">
+                                <div style="font-size:8px;font-weight:700;color:#e11d48;margin-bottom:2px;">🔍 รอบ 1</div>
+                                ${origPhotoHtml}
+                                <div style="font-size:9px;color:#6b7280;margin-top:2px;line-height:1.3;">${iss.origNote}</div>
+                            </div>
+                            <div style="background:#ecfdf5;border-radius:4px;padding:4px;">
+                                <div style="font-size:8px;font-weight:700;color:#059669;margin-bottom:2px;">✅ รอบ 2</div>
+                                ${rePhotoHtml}
+                                <div style="font-size:9px;color:#6b7280;margin-top:2px;line-height:1.3;">${iss.reNote||'-'}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('')}
         </div>
-        <div style="text-align:center;margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;"><p style="font-size:10px;color:#d1d5db;">Uchi Kakunin Setsubi System</p></div>
     </div>
+    `).join('')}
+
+    <!-- ===== SIGNATURE PAGE ===== -->
+    <div style="width:210mm;padding:20mm;min-height:297mm;display:flex;flex-direction:column;justify-content:space-between;">
+        <div>
+            <h2 style="font-size:22px;font-weight:700;color:#ea580c;margin-bottom:20px;border-bottom:3px solid #ea580c;padding-bottom:8px;">📝 ลงลายมือชื่อ</h2>
+            <p style="font-size:14px;color:#6b7280;margin-bottom:40px;">ข้าพเจ้าได้ทำการตรวจสอบการแก้ไขดังกล่าวข้างต้นด้วยความเรียบร้อย</p>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:40px;">
+            <div style="flex:1;text-align:center;">
+                <div style="height:80px;border-bottom:2px dashed #d1d5db;margin-bottom:8px;"></div>
+                <p style="font-size:14px;font-weight:600;">ผู้ตรวจ (${r.inspectorName||'...........'})</p>
+                <p style="font-size:12px;color:#9ca3af;">วันที่ ${r.date}</p>
+            </div>
+            <div style="flex:1;text-align:center;">
+                <div style="height:80px;border-bottom:2px dashed #d1d5db;margin-bottom:8px;"></div>
+                <p style="font-size:14px;font-weight:600;">เจ้าของบ้าน (${originalInspection.ownerName})</p>
+                <p style="font-size:12px;color:#9ca3af;">วันที่ ${r.date}</p>
+            </div>
+        </div>
+        <div style="text-align:center;margin-top:40px;padding-top:20px;border-top:1px solid #e5e7eb;">
+            <p style="font-size:11px;color:#d1d5db;">รายงานนี้สร้างโดย Uchi Kakunin Setsubi System • ${new Date().toLocaleDateString('th-TH')}</p>
+        </div>
+    </div>
+
     </div>`;
 
-    html2pdf().set({ margin:0, filename:`comparison-${originalInspection.date}-${originalInspection.ownerName}.pdf`, image:{type:'jpeg',quality:0.85}, html2canvas:{scale:2,useCORS:true}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}, pagebreak:{mode:['css','legacy']} }).from(el).save().then(() => { showToast('สร้าง PDF สำเร็จ! ✓','success'); el.style.left='-9999px'; }).catch(() => { el.style.left='-9999px'; });
+    html2pdf().set({ margin:0, filename:`comparison-${originalInspection.date}-${originalInspection.ownerName}.pdf`, image:{type:'jpeg',quality:0.85}, html2canvas:{scale:2,useCORS:true,letterRendering:true}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}, pagebreak:{mode:['css','legacy']} }).from(el).save().then(() => { showToast('สร้าง PDF สำเร็จ! ✓','success'); el.style.left='-9999px'; }).catch(() => { el.style.left='-9999px'; });
 }
 
 // ===== TOAST =====
