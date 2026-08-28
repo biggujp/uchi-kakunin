@@ -214,7 +214,7 @@
 <!-- ===== NAV TABS ===== -->
 <nav class="no-print sticky top-[60px] z-40 glass border-b border-white/30">
     <div class="max-w-2xl mx-auto flex">
-        <button class="nav-btn active flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-semibold transition border-b-[3px]" data-page="inspect" onclick="switchPage('inspect')">
+        <button class="nav-btn active flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-semibold transition border-b-[3px]" data-page="inspect" onclick="editingInspectionId=null;document.getElementById('editModeBanner').classList.add('hidden');switchPage('inspect')">
             <i class="fas fa-clipboard-check text-lg"></i>ตรวจเช็ค
         </button>
         <button class="nav-btn flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-semibold transition border-b-[3px] border-transparent text-gray-400" data-page="report" onclick="switchPage('report')">
@@ -237,6 +237,20 @@
 
 <!-- PAGE: INSPECT -->
 <div id="pg-inspect" class="page anim-slide-up">
+
+    <!-- Edit mode banner -->
+    <div id="editModeBanner" class="hidden mb-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-pen text-amber-500 text-sm"></i>
+        </div>
+        <div class="flex-1">
+            <p class="text-sm font-bold text-amber-800">กำลังแก้ไขรายการ inspection</p>
+            <p class="text-[11px] text-amber-500">แก้ไขเสร็จแล้วกดบันทึกเพื่ออัปเดต</p>
+        </div>
+        <button onclick="cancelEdit()" class="text-amber-400 hover:text-amber-600 text-sm font-bold px-2">
+            <i class="fas fa-xmark"></i>
+        </button>
+    </div>
 
     <!-- ข้อมูลทรัพย์สิน -->
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
@@ -799,6 +813,44 @@ function toggleSection(id) {
     chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0)';
 }
 
+// ===== EDIT MODE =====
+let editingInspectionId = null;
+
+function editInspection() {
+    if (!currentInspection) return;
+    editingInspectionId = currentInspection.id;
+
+    // Load saved data back into form
+    inspectionData = JSON.parse(JSON.stringify(currentInspection.data));
+    housePhotos = [...(currentInspection.housePhotos || [])];
+
+    // Fill form fields
+    document.getElementById('ownerName').value = currentInspection.ownerName || '';
+    document.getElementById('address').value = currentInspection.address || '';
+    document.getElementById('inspectionDate').value = currentInspection.date || '';
+    document.getElementById('houseType').value = currentInspection.houseType || '';
+    document.getElementById('inspectorName').value = currentInspection.inspectorName || '';
+
+    // Re-render checklist with existing data
+    renderChecklist();
+    renderHousePhotos();
+    saveLocal();
+
+    // Switch to inspect page
+    switchPage('inspect');
+
+    // Show edit mode banner
+    document.getElementById('editModeBanner').classList.remove('hidden');
+    showToast('แก้ไขรายการ inspection — กดบันทึกเมื่อแก้ไขเสร็จ', 'success');
+}
+
+function cancelEdit() {
+    editingInspectionId = null;
+    document.getElementById('editModeBanner').classList.add('hidden');
+    showToast('ยกเลิกการแก้ไข', '');
+    switchPage('report');
+}
+
 // ===== SUBMIT =====
 function highlightField(el) {
     el.style.borderColor = '#ef4444';
@@ -841,28 +893,58 @@ function submitInspection() {
         return;
     }
 
-    const report = {
-        id: Date.now(),
-        date: document.getElementById('inspectionDate').value,
-        ownerName: owner,
-        address: addr,
-        houseType: document.getElementById('houseType').value,
-        inspectorName: document.getElementById('inspectorName').value,
-        housePhotos: [...housePhotos],
-        data: JSON.parse(JSON.stringify(inspectionData)),
-        timestamp: new Date().toISOString()
-    };
+    const now = new Date().toISOString();
+    let report;
 
-    inspections.unshift(report);
+    if (editingInspectionId) {
+        // Edit mode: update existing inspection
+        const idx = inspections.findIndex(r => r.id === editingInspectionId);
+        if (idx === -1) {
+            showToast('ไม่พบรายการที่ต้องการแก้ไข', 'error');
+            editingInspectionId = null;
+            return;
+        }
+        report = {
+            ...inspections[idx],
+            date: document.getElementById('inspectionDate').value,
+            ownerName: owner,
+            address: addr,
+            houseType: document.getElementById('houseType').value,
+            inspectorName: document.getElementById('inspectorName').value,
+            housePhotos: [...housePhotos],
+            data: JSON.parse(JSON.stringify(inspectionData)),
+            updatedAt: now
+        };
+        inspections[idx] = report;
+    } else {
+        // New mode: create new inspection
+        report = {
+            id: Date.now(),
+            date: document.getElementById('inspectionDate').value,
+            ownerName: owner,
+            address: addr,
+            houseType: document.getElementById('houseType').value,
+            inspectorName: document.getElementById('inspectorName').value,
+            housePhotos: [...housePhotos],
+            data: JSON.parse(JSON.stringify(inspectionData)),
+            timestamp: now
+        };
+        inspections.unshift(report);
+    }
+
     localStorage.setItem('inspections', JSON.stringify(inspections));
     savePropertyInfo();
     currentInspection = report;
+    editingInspectionId = null; // reset edit mode
+    document.getElementById('editModeBanner').classList.add('hidden');
     generateReport(report);
 
     // Sync to API (online or queue for offline)
     syncToAPI(report);
 
-    const msg = isOnline ? 'บันทึกรายงานสำเร็จ! ✓' : 'บันทึกลงเครื่อง - จะซิงค์เมื่อมีสัญญาณ 📡';
+    const msg = editingInspectionId
+        ? 'แก้ไขรายการสำเร็จ! ✓'
+        : (isOnline ? 'บันทึกรายงานสำเร็จ! ✓' : 'บันทึกลงเครื่อง - จะซิงค์เมื่อมีสัญญาณ 📡');
     showToast(msg, 'success');
     setTimeout(() => switchPage('report'), 400);
 }
@@ -974,6 +1056,9 @@ function generateReport(r) {
     const hasIssues = issues.length > 0;
 
     html += `<div class="flex gap-2">
+        <button onclick="editInspection()" class="py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 active:scale-[0.98] transition flex items-center justify-center gap-2">
+            <i class="fas fa-pen-to-square"></i>
+        </button>
         <button onclick="generatePDF()" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white font-bold text-sm shadow-lg shadow-brand-500/20 active:scale-[0.98] transition flex items-center justify-center gap-2">
             <i class="fas fa-file-pdf"></i> PDF
         </button>
