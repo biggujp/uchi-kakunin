@@ -413,23 +413,8 @@
             <h2 class="font-bold text-sm">สถานะการซิงค์</h2>
         </div>
         <div class="p-5 space-y-3">
-            <div class="flex items-center gap-3 p-3 rounded-xl bg-gray-50">
-                <div class="w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}"></div>
-                <div class="flex-1">
-                    <p class="text-sm font-semibold ${isOnline ? 'text-emerald-600' : 'text-rose-600'}">${isOnline ? '🟢 ออนไลน์' : '🔴 ออฟไลน์'}</p>
-                    <p class="text-[11px] text-gray-400">${isOnline ? 'ข้อมูลจะซิงค์ทันที' : 'ข้อมูลจะซิงค์เมื่อกลับมาออนไลน์'}</p>
-                </div>
-            </div>
-            <div id="syncQueueStatus" class="text-sm text-gray-500">
-                ${syncQueue.length > 0 ? `<div class="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
-                    <i class="fas fa-clock text-amber-500"></i>
-                    <span class="text-amber-700 font-semibold">รอซิงค์ ${syncQueue.length} รายการ</span>
-                    <button onclick="processSyncQueue()" class="ml-auto text-amber-600 hover:text-amber-800 text-xs font-bold">ซิงค์เลย</button>
-                </div>` : '<div class="flex items-center gap-2 p-3 rounded-xl bg-emerald-50">
-                    <i class="fas fa-check-circle text-emerald-500"></i>
-                    <span class="text-emerald-700 text-sm">ซิงค์ข้อมูลครบถ้วน ✓</span>
-                </div>'}
-            </div>
+            <div id="syncOnlineStatus"></div>
+            <div id="syncQueueStatus"></div>
             <button onclick="processSyncQueue();syncCustomItemsToServer()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm active:scale-[0.98] transition">
                 <i class="fas fa-sync mr-1"></i> บังคับซิงค์ตอนนี้
             </button>
@@ -530,6 +515,7 @@ function switchPage(id) {
         active.classList.add('active','text-brand-600','border-brand-500');
         active.classList.remove('text-gray-400','border-transparent');
     }
+    if (id === 'settings') renderSyncStatus();
     window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -1221,6 +1207,39 @@ function saveSettings() {
     showToast('บันทึกการตั้งค่าสำเร็จ!','success');
 }
 
+function renderSyncStatus() {
+    const onlineEl = document.getElementById('syncOnlineStatus');
+    const queueEl = document.getElementById('syncQueueStatus');
+    if (!onlineEl || !queueEl) return;
+
+    onlineEl.innerHTML = `
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-gray-50">
+            <div class="w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}"></div>
+            <div class="flex-1">
+                <p class="text-sm font-semibold ${isOnline ? 'text-emerald-600' : 'text-rose-600'}">${isOnline ? '🟢 ออนไลน์' : '🔴 ออฟไลน์'}</p>
+                <p class="text-[11px] text-gray-400">${isOnline ? 'ข้อมูลจะซิงค์ทันที' : 'ข้อมูลจะซิงค์เมื่อกลับมาออนไลน์'}</p>
+            </div>
+        </div>
+    `;
+
+    if (syncQueue.length > 0) {
+        queueEl.innerHTML = `
+            <div class="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                <i class="fas fa-clock text-amber-500"></i>
+                <span class="text-amber-700 font-semibold">รอซิงค์ ${syncQueue.length} รายการ</span>
+                <button onclick="processSyncQueue()" class="ml-auto text-amber-600 hover:text-amber-800 text-xs font-bold">ซิงค์เลย</button>
+            </div>
+        `;
+    } else {
+        queueEl.innerHTML = `
+            <div class="flex items-center gap-2 p-3 rounded-xl bg-emerald-50">
+                <i class="fas fa-check-circle text-emerald-500"></i>
+                <span class="text-emerald-700 text-sm">ซิงค์ข้อมูลครบถ้วน ✓</span>
+            </div>
+        `;
+    }
+}
+
 // ===== LOCAL STORAGE =====
 function saveLocal() { localStorage.setItem('inspectionData', JSON.stringify(inspectionData)); }
 function savePropertyInfo() {
@@ -1760,6 +1779,7 @@ let syncQueue = JSON.parse(localStorage.getItem('syncQueue') || '[]');
 window.addEventListener('online', () => {
     isOnline = true;
     showToast('🌐 กลับมาออนไลน์แล้ว - กำลังซิงค์...','success');
+    renderSyncStatus();
     processSyncQueue();
     syncCustomItemsToServer();
 });
@@ -1767,6 +1787,7 @@ window.addEventListener('online', () => {
 window.addEventListener('offline', () => {
     isOnline = false;
     showToast('📡 ไม่มีสัญญาณ - บันทึกลงเครื่องอัตโนมัติ','');
+    renderSyncStatus();
 });
 
 // Add action to sync queue (for offline use)
@@ -1839,6 +1860,7 @@ async function processSyncQueue() {
     if (processed > 0) {
         showToast(`✅ ซิงค์สำเร็จ ${processed} รายการ${errors > 0 ? `, ผิดพลาด ${errors}` : ''}`,'success');
     }
+    renderSyncStatus();
 }
 
 // ===== CUSTOM ITEMS =====
