@@ -951,6 +951,16 @@ function generatePDF() {
             d.issues.forEach(iss => issues.push({ section:sec.title, item:it.text, note:iss.note, photos:iss.photos||[] }));
         }
     }));
+    // Also collect custom items that failed
+    Object.keys(customItems).forEach(secId => {
+        const section = CHECKLIST.find(s=>s.id===secId);
+        (customItems[secId]||[]).forEach(ci => {
+            const d = r.data[ci.id];
+            if (d?.status === 'fail' && d.issues?.length) {
+                d.issues.forEach(iss => issues.push({ section:section?.title||secId, item:ci.text, note:iss.note, photos:iss.photos||[] }));
+            }
+        });
+    });
 
     const el = document.getElementById('pdfContent');
     el.style.position = 'absolute';
@@ -1007,20 +1017,40 @@ function generatePDF() {
             </div>
         </div>
 
-        ${issues.length ? `
+    ${issues.length ? `
         <h3 style="font-size:16px;font-weight:600;color:#e11d48;margin-bottom:12px;">⚠️ จุดที่ต้องแก้ไข (${issues.length} รายการ)</h3>
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <thead><tr style="background:#fff1f2;"><th style="padding:8px;border:1px solid #fecdd3;text-align:left;width:5%;">#</th><th style="padding:8px;border:1px solid #fecdd3;text-align:left;width:15%;">หมวด</th><th style="padding:8px;border:1px solid #fecdd3;text-align:left;width:25%;">รายการ</th><th style="padding:8px;border:1px solid #fecdd3;text-align:left;width:30%;">รายละเอียด</th><th style="padding:8px;border:1px solid #fecdd3;text-align:left;width:25%;">รูปภาพ</th></tr></thead>
-            <tbody>
-            ${issues.map((iss,i)=>`<tr>
-                <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;font-weight:700;">${i+1}</td>
-                <td style="padding:8px;border:1px solid #e5e7eb;">${iss.section}</td>
-                <td style="padding:8px;border:1px solid #e5e7eb;font-weight:500;">${iss.item}</td>
-                <td style="padding:8px;border:1px solid #e5e7eb;">${iss.note||'-'}</td>
-                <td style="padding:8px;border:1px solid #e5e7eb;">${iss.photos.length ? iss.photos.map(src=>`<img src="${src}" style="width:60px;height:60px;object-fit:cover;border-radius:4px;display:inline-block;margin:2px;">`).join('') : '-'}</td>
-            </tr>`).join('')}
-            </tbody>
-        </table>` : '<div style="text-align:center;padding:30px;background:#ecfdf5;border-radius:12px;"><p style="font-size:18px;font-weight:700;color:#059669;">✅ ผ่านทุกรายการ ไม่มีปัญหา!</p></div>'}
+        ${(() => {
+            // Group issues into pages of 6 (2 columns x 3 rows)
+            const ITEMS_PER_PAGE = 6;
+            const pages = [];
+            for (let i = 0; i < issues.length; i += ITEMS_PER_PAGE) {
+                pages.push(issues.slice(i, i + ITEMS_PER_PAGE));
+            }
+            return pages.map((pageItems, pageIdx) => `
+                <div style="${pageIdx > 0 ? 'page-break-before:always;' : ''}margin-bottom:16px;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                        ${pageItems.map((iss, i) => {
+                            const globalIdx = pageIdx * ITEMS_PER_PAGE + i;
+                            const photoHtml = iss.photos.length 
+                                ? iss.photos.map(src=>`<img src="${src}" style="width:100%;height:140px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;">`).join('')
+                                : '<div style="width:100%;height:140px;background:#f3f4f6;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px;">ไม่มีรูปภาพ</div>';
+                            return `
+                            <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;page-break-inside:avoid;">
+                                <div style="background:#fff1f2;padding:4px 8px;display:flex;align-items:center;gap:6px;">
+                                    <span style="background:#e11d48;color:white;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">#${globalIdx+1}</span>
+                                    <span style="font-size:10px;color:#9ca3af;">${iss.section}</span>
+                                </div>
+                                ${photoHtml}
+                                <div style="padding:6px 8px;">
+                                    <div style="font-size:11px;font-weight:600;color:#1f2937;margin-bottom:2px;">${iss.item}</div>
+                                    <div style="font-size:10px;color:#6b7280;line-height:1.4;">${iss.note||'ไม่มีรายละเอียด'}</div>
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>
+            `).join('');
+        })()}` : '<div style="text-align:center;padding:30px;background:#ecfdf5;border-radius:12px;"><p style="font-size:18px;font-weight:700;color:#059669;">✅ ผ่านทุกรายการ ไม่มีปัญหา!</p></div>'}
     </div>
 
     <!-- ===== DETAIL PAGES ===== -->
