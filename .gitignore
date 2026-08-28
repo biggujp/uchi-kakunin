@@ -1,0 +1,7 @@
+api/__pycache__/
+api/service_account.json
+api/test_connect.py
+.freebuff/
+*.pyc
+__pycache__/
+.env

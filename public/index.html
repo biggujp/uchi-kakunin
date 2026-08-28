@@ -1,0 +1,2249 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Uchi Kakunin Setsubi | ระบบตรวจเช็คบ้าน</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { thai: ['IBM Plex Sans Thai', 'sans-serif'] },
+                    colors: {
+                        brand: { 50:'#eff6ff',100:'#dbeafe',200:'#bfdbfe',300:'#93c5fd',400:'#60a5fa',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8',800:'#1e40af',900:'#1e3a8a' },
+                        emerald: { 50:'#ecfdf5',100:'#d1fae5',200:'#a7f3d0',300:'#6ee7b7',400:'#34d399',500:'#10b981',600:'#059669',700:'#047857' },
+                        rose: { 50:'#fff1f2',100:'#ffe4e6',200:'#fecdd3',300:'#fda4af',400:'#fb7185',500:'#f43f5e',600:'#e11d48',700:'#be123c' },
+                        amber: { 50:'#fffbeb',100:'#fef3c7',200:'#fde68a',300:'#fcd34d',400:'#fbbf24',500:'#f59e0b',600:'#d97706',700:'#b45309' },
+                        violet: { 50:'#f5f3ff',100:'#ede9fe',200:'#ddd6fe',300:'#c4b5fd',400:'#a78bfa',500:'#8b5cf6',600:'#7c3aed',700:'#6d28d9' },
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+        body { font-family:'IBM Plex Sans Thai',sans-serif; background:#f0f4ff; min-height:100vh; min-height:100dvh; padding-bottom:env(safe-area-inset-bottom,0px); }
+        .hide-scrollbar::-webkit-scrollbar { display:none; }
+        .hide-scrollbar { -ms-overflow-style:none; scrollbar-width:none; }
+        @keyframes slideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+        @keyframes scaleIn { from{opacity:0;transform:scale(0.95)} to{opacity:1;transform:scale(1)} }
+        @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.5} }
+        .anim-slide-up { animation:slideUp 0.35s ease both }
+        .anim-fade { animation:fadeIn 0.3s ease both }
+        .anim-scale { animation:scaleIn 0.25s ease both }
+        .photo-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+        .photo-grid img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:8px; }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter:invert(0.4); }
+        .glass { background:rgba(255,255,255,0.85); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
+        .line-clamp-2 { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+        /* PDF Print Styles */
+        @media print { .no-print{display:none!important} .print-only{display:block!important} }
+        .print-only { display:none; }
+        #pdfContent { font-family:'IBM Plex Sans Thai',sans-serif; }
+    </style>
+</head>
+<body class="font-thai">
+
+<!-- ===== AUTH MODAL ===== -->
+<div id="authModal" class="fixed inset-0 z-[200] bg-black/50 flex items-end sm:items-center justify-center hidden">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto anim-slide-up">
+        <!-- Login Form -->
+        <div id="loginForm" class="p-6">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 mx-auto bg-gradient-to-br from-brand-500 to-violet-600 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg shadow-brand-500/30 mb-3">
+                    <i class="fas fa-user-lock"></i>
+                </div>
+                <h2 class="text-xl font-bold text-gray-800">เข้าสู่ระบบ</h2>
+                <p class="text-sm text-gray-400 mt-1">Uchi Kakunin Setsubi - Multi-User</p>
+            </div>
+            <div class="space-y-3">
+                <input type="text" id="loginUsername" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 focus:border-brand-400 outline-none text-sm" placeholder="Username">
+                <input type="password" id="loginPassword" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 focus:border-brand-400 outline-none text-sm" placeholder="Password">
+                <button onclick="doLogin()" class="w-full py-3 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white font-bold text-sm shadow-lg shadow-brand-500/25 active:scale-[0.98] transition">
+                    <i class="fas fa-right-to-bracket mr-1"></i> เข้าสู่ระบบ
+                </button>
+            </div>
+            <p class="text-center text-sm text-gray-400 mt-4">
+                ยังไม่มีบัญชี? <button onclick="showRegister()" class="text-brand-600 font-semibold">สมัครสมาชิก</button>
+            </p>
+            <button onclick="closeAuthModal()" class="w-full mt-3 py-2 text-gray-400 text-sm">ข้าม - ใช้งานออฟไลน์</button>
+        </div>
+        <!-- Register Form -->
+        <div id="registerForm" class="p-6 hidden">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 mx-auto bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg shadow-emerald-500/30 mb-3">
+                    <i class="fas fa-user-plus"></i>
+                </div>
+                <h2 class="text-xl font-bold text-gray-800">สมัครสมาชิก</h2>
+            </div>
+            <div class="space-y-3">
+                <input type="text" id="regUsername" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 focus:border-emerald-400 outline-none text-sm" placeholder="Username">
+                <input type="text" id="regDisplayName" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 focus:border-emerald-400 outline-none text-sm" placeholder="ชื่อที่ต้องการแสดง">
+                <input type="password" id="regPassword" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 focus:border-emerald-400 outline-none text-sm" placeholder="Password (4+ ตัวอักษร)">
+                <select id="regRole" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 focus:border-emerald-400 outline-none text-sm bg-white">
+                    <option value="inspector">Inspector (ผู้ตรวจ)</option>
+                    <option value="viewer">Viewer (ผู้ดู)</option>
+                </select>
+                <button onclick="doRegister()" class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold text-sm shadow-lg shadow-emerald-500/25 active:scale-[0.98] transition">
+                    <i class="fas fa-user-plus mr-1"></i> สมัครสมาชิก
+                </button>
+            </div>
+            <p class="text-center text-sm text-gray-400 mt-4">
+                มีบัญชีแล้ว? <button onclick="showLogin()" class="text-brand-600 font-semibold">เข้าสู่ระบบ</button>
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- ===== NOTIFICATION PANEL ===== -->
+<div id="notifPanel" class="fixed inset-0 z-[190] hidden" onclick="closeNotificationPanel()">
+    <div class="absolute inset-0 bg-black/30"></div>
+    <div class="absolute top-[60px] right-0 w-full sm:w-96 max-h-[80vh] bg-white rounded-b-2xl sm:rounded-2xl shadow-2xl overflow-hidden anim-slide-up" onclick="event.stopPropagation()">
+        <div class="px-5 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white flex items-center justify-between">
+            <h2 class="font-bold text-sm flex items-center gap-2"><i class="fas fa-bell"></i> การแจ้งเตือน</h2>
+            <div class="flex gap-2">
+                <button onclick="markAllRead()" class="text-white/70 hover:text-white text-[11px] font-semibold transition">อ่านทั้งหมด</button>
+                <button onclick="closeNotificationPanel()" class="text-white/70 hover:text-white"><i class="fas fa-xmark"></i></button>
+            </div>
+        </div>
+        <div id="notifList" class="overflow-y-auto max-h-[calc(80vh-60px)] divide-y divide-gray-50">
+            <div class="text-center py-10 text-gray-400 text-sm">
+                <i class="fas fa-bell-slash text-3xl mb-2 block text-gray-200"></i>
+                ยังไม่มีการแจ้งเตือน
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== ADD ITEM MODAL ===== -->
+<div id="addItemModal" class="fixed inset-0 z-[200] bg-black/50 flex items-end sm:items-center justify-center hidden">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md p-6 anim-slide-up">
+        <div class="text-center mb-4">
+            <div class="w-12 h-12 mx-auto bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center text-white text-xl shadow-lg mb-2">
+                <i class="fas fa-plus-circle"></i>
+            </div>
+            <h2 class="text-lg font-bold text-gray-800" id="addItemModalTitle">เพิ่มรายการตรวจสอบ</h2>
+        </div>
+        <div class="space-y-3">
+            <input type="hidden" id="addItemSectionId">
+            <input type="hidden" id="addItemEditId" value="">
+            <div>
+                <label class="text-xs font-semibold text-gray-500 mb-1 block">ชื่อรายการ <span class="text-rose-500">*</span></label>
+                <input type="text" id="addItemText" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 focus:border-amber-400 outline-none text-sm" placeholder="เช่น ผนังห้องน้ำแตกร้าว">
+            </div>
+            <div class="flex gap-2">
+                <button onclick="saveCustomItem()" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-sm shadow-lg shadow-amber-500/25 active:scale-[0.98] transition">
+                    <i class="fas fa-check mr-1"></i> บันทึก
+                </button>
+                <button onclick="closeAddItemModal()" class="py-3 px-5 rounded-xl bg-gray-100 text-gray-500 font-semibold text-sm active:scale-[0.98] transition">
+                    ยกเลิก
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== SHARE MODAL ===== -->
+<div id="shareModal" class="fixed inset-0 z-[200] bg-black/50 flex items-end sm:items-center justify-center hidden">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md p-6 anim-slide-up">
+        <div class="text-center mb-4">
+            <div class="w-12 h-12 mx-auto bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl flex items-center justify-center text-white text-xl shadow-lg mb-2">
+                <i class="fas fa-share-nodes"></i>
+            </div>
+            <h2 class="text-lg font-bold text-gray-800">แชร์รายงาน</h2>
+        </div>
+        <div class="space-y-3">
+            <div id="shareUserList" class="space-y-2 max-h-60 overflow-y-auto"></div>
+            <div class="flex gap-2">
+                <button onclick="shareToAll()" class="flex-1 py-2.5 rounded-xl bg-violet-50 text-violet-700 font-semibold text-sm border border-violet-200 active:scale-[0.98] transition">
+                    <i class="fas fa-globe mr-1"></i> แชร์ให้ทุกคน
+                </button>
+                <button onclick="closeShareModal()" class="py-2.5 px-4 rounded-xl bg-gray-100 text-gray-500 font-semibold text-sm active:scale-[0.98] transition">ปิด</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== USER MENU MODAL ===== -->
+<div id="userMenuModal" class="fixed inset-0 z-[200] bg-black/50 flex items-end sm:items-center justify-center hidden" onclick="closeUserMenu()">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm p-6 anim-slide-up" onclick="event.stopPropagation()">
+        <div id="userMenuContent"></div>
+    </div>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div id="toastWrap" class="fixed top-4 left-1/2 -translate-x-1/2 z-[999] w-[calc(100%-2rem)] max-w-sm space-y-2"></div>
+
+<!-- ===== HEADER ===== -->
+<header class="no-print sticky top-0 z-50 glass border-b border-white/30 shadow-sm">
+    <div class="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-brand-500/30">
+                <i class="fas fa-house-chimney text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-base font-bold text-gray-800 leading-tight">Uchi Kakunin Setsubi</h1>
+                <p class="text-[11px] text-gray-400 font-light">ระบบตรวจเช็คบ้าน</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="syncData()" class="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center hover:bg-brand-100 transition">
+                <i class="fas fa-rotate text-sm"></i>
+            </button>
+            <button onclick="toggleNotificationPanel()" class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center hover:bg-amber-100 transition relative">
+                <i class="fas fa-bell text-sm"></i>
+                <span id="notifBadge" class="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center hidden">0</span>
+            </button>
+            <button onclick="exportJSON()" class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100 transition">
+                <i class="fas fa-download text-sm"></i>
+            </button>
+            <button onclick="openUserMenu()" id="userAvatarBtn" class="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 text-white flex items-center justify-center text-sm font-bold shadow-md shadow-violet-500/20 hover:shadow-lg transition">
+                <i class="fas fa-user"></i>
+            </button>
+        </div>
+    </div>
+</header>
+
+<!-- ===== NAV TABS ===== -->
+<nav class="no-print sticky top-[60px] z-40 glass border-b border-white/30">
+    <div class="max-w-2xl mx-auto flex">
+        <button class="nav-btn active flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-semibold transition border-b-[3px]" data-page="inspect" onclick="switchPage('inspect')">
+            <i class="fas fa-clipboard-check text-lg"></i>ตรวจเช็ค
+        </button>
+        <button class="nav-btn flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-semibold transition border-b-[3px] border-transparent text-gray-400" data-page="report" onclick="switchPage('report')">
+            <i class="fas fa-chart-pie text-lg"></i>รายงาน
+        </button>
+        <button class="nav-btn flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-semibold transition border-b-[3px] border-transparent text-gray-400" data-page="history" onclick="switchPage('history')">
+            <i class="fas fa-clock-rotate-left text-lg"></i>ประวัติ
+        </button>
+        <button class="nav-btn flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-semibold transition border-b-[3px] border-transparent text-gray-400" data-page="users" onclick="switchPage('users')">
+            <i class="fas fa-users text-lg"></i>ผู้ใช้
+        </button>
+        <button class="nav-btn flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-semibold transition border-b-[3px] border-transparent text-gray-400" data-page="settings" onclick="switchPage('settings')">
+            <i class="fas fa-gear text-lg"></i>ตั้งค่า
+        </button>
+    </div>
+</nav>
+
+<!-- ===== MAIN ===== -->
+<main class="max-w-2xl mx-auto px-4 pt-4 pb-24 no-print">
+
+<!-- PAGE: INSPECT -->
+<div id="pg-inspect" class="page anim-slide-up">
+
+    <!-- ข้อมูลทรัพย์สิน -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
+        <div class="px-5 py-4 bg-gradient-to-r from-brand-500 to-brand-600 text-white flex items-center gap-3">
+            <i class="fas fa-building-circle-check text-xl opacity-80"></i>
+            <h2 class="font-bold text-[15px]">ข้อมูลทรัพย์สิน</h2>
+        </div>
+        <div class="p-5 space-y-3">
+            <div>
+                <label class="text-xs font-semibold text-gray-500 mb-1 block">ชื่อเจ้าของบ้าน <span class="text-rose-500">*</span></label>
+                <input type="text" id="ownerName" class="w-full px-4 py-2.5 rounded-xl border-2 border-gray-100 focus:border-brand-400 focus:ring-2 focus:ring-brand-100 outline-none transition text-sm" placeholder="กรอกชื่อ-นามสกุล">
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-500 mb-1 block">ที่อยู่ <span class="text-rose-500">*</span></label>
+                <textarea id="address" rows="2" class="w-full px-4 py-2.5 rounded-xl border-2 border-gray-100 focus:border-brand-400 focus:ring-2 focus:ring-brand-100 outline-none transition text-sm resize-none" placeholder="กรอกที่อยู่ทรัพย์สิน"></textarea>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs font-semibold text-gray-500 mb-1 block">ประเภทบ้าน</label>
+                    <select id="houseType" class="w-full px-4 py-2.5 rounded-xl border-2 border-gray-100 focus:border-brand-400 outline-none transition text-sm bg-white appearance-none">
+                        <option value="">เลือก</option>
+                        <option>บ้านเดี่ยว</option><option>ทาวน์โฮม</option><option>คอนโด</option><option>แฟลต</option><option>อื่นๆ</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-500 mb-1 block">วันที่ตรวจ</label>
+                    <input type="date" id="inspectionDate" class="w-full px-4 py-2.5 rounded-xl border-2 border-gray-100 focus:border-brand-400 outline-none transition text-sm">
+                </div>
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-500 mb-1 block">ชื่อผู้ตรวจ</label>
+                <input type="text" id="inspectorName" class="w-full px-4 py-2.5 rounded-xl border-2 border-gray-100 focus:border-brand-400 focus:ring-2 focus:ring-brand-100 outline-none transition text-sm" placeholder="กรอกชื่อผู้ตรวจ">
+            </div>
+
+            <!-- ถ่ายรูปหน้าบ้าน -->
+            <div>
+                <label class="text-xs font-semibold text-gray-500 mb-2 block">📸 รูปหน้าบ้าน</label>
+                <div id="housePhotoGrid" class="photo-grid mb-2"></div>
+                <label class="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-brand-200 rounded-xl bg-brand-50/50 text-brand-600 font-semibold text-sm cursor-pointer hover:bg-brand-50 transition">
+                    <i class="fas fa-camera-retro"></i> ถ่ายรูปหน้าบ้าน
+                    <input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="handleHousePhotos(this)">
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- ความคืบหน้า -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
+        <div class="flex justify-between items-center mb-2">
+            <span class="text-xs font-semibold text-gray-500">ความคืบหน้า</span>
+            <span class="text-xs font-bold text-brand-600" id="progressText">0 / 0</span>
+        </div>
+        <div class="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+            <div id="progressBar" class="h-full bg-gradient-to-r from-brand-400 to-violet-500 rounded-full transition-all duration-500" style="width:0%"></div>
+        </div>
+    </div>
+
+    <!-- สถิติ -->
+    <div class="grid grid-cols-3 gap-3 mb-4">
+        <div class="bg-gradient-to-br from-emerald-50 to-emerald-100/50 rounded-2xl p-3 text-center border border-emerald-200/50">
+            <div class="text-2xl font-extrabold text-emerald-600" id="statPass">0</div>
+            <div class="text-[10px] font-semibold text-emerald-500 mt-0.5">ผ่าน ✓</div>
+        </div>
+        <div class="bg-gradient-to-br from-rose-50 to-rose-100/50 rounded-2xl p-3 text-center border border-rose-200/50">
+            <div class="text-2xl font-extrabold text-rose-600" id="statFail">0</div>
+            <div class="text-[10px] font-semibold text-rose-500 mt-0.5">ปัญหา ✗</div>
+        </div>
+        <div class="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-2xl p-3 text-center border border-gray-200/50">
+            <div class="text-2xl font-extrabold text-gray-400" id="statPending">0</div>
+            <div class="text-[10px] font-semibold text-gray-400 mt-0.5">รอตรวจ</div>
+        </div>
+    </div>
+
+    <!-- Checklist Sections -->
+    <div id="checklistContainer" class="space-y-3"></div>
+
+    <!-- Submit -->
+    <button onclick="submitInspection()" class="w-full mt-4 py-3.5 rounded-2xl bg-gradient-to-r from-brand-500 via-brand-600 to-violet-600 text-white font-bold text-sm shadow-lg shadow-brand-500/25 active:scale-[0.98] transition flex items-center justify-center gap-2">
+        <i class="fas fa-paper-plane"></i> บันทึกรายงานการตรวจ
+    </button>
+</div>
+
+<!-- PAGE: REPORT -->
+<div id="pg-report" class="page hidden">
+    <div id="reportContent">
+        <div class="text-center py-16">
+            <div class="w-20 h-20 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-4"><i class="fas fa-chart-pie text-3xl text-gray-300"></i></div>
+            <h3 class="font-bold text-gray-400">ยังไม่มีรายงาน</h3>
+            <p class="text-xs text-gray-300 mt-1">ทำการตรวจเช็คแล้วกดบันทึกรายงาน</p>
+        </div>
+    </div>
+</div>
+
+<!-- PAGE: HISTORY -->
+<div id="pg-history" class="page hidden">
+    <div id="historyContent">
+        <div class="text-center py-16">
+            <div class="w-20 h-20 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-4"><i class="fas fa-clock-rotate-left text-3xl text-gray-300"></i></div>
+            <h3 class="font-bold text-gray-400">ยังไม่มีประวัติ</h3>
+            <p class="text-xs text-gray-300 mt-1">ประวัติการตรวจเช็คจะแสดงที่นี่</p>
+        </div>
+    </div>
+</div>
+
+<!-- PAGE: USERS -->
+<div id="pg-users" class="page hidden space-y-4">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-5 py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center justify-between">
+            <h2 class="font-bold text-sm flex items-center gap-2"><i class="fas fa-users"></i> จัดการผู้ใช้</h2>
+            <button onclick="showAddUserForm()" class="bg-white/20 px-3 py-1 rounded-lg text-xs font-semibold hover:bg-white/30 transition">
+                <i class="fas fa-plus mr-1"></i> เพิ่มผู้ใช้
+            </button>
+        </div>
+        <div id="usersList" class="divide-y divide-gray-50"></div>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-5 py-4 bg-gradient-to-r from-brand-500 to-brand-600 text-white">
+            <h2 class="font-bold text-sm flex items-center gap-2"><i class="fas fa-share-nodes"></i> รายงานที่ถูกแชร์มาให้</h2>
+        </div>
+        <div id="sharedList" class="divide-y divide-gray-50 p-4">
+            <p class="text-sm text-gray-400 text-center py-4">ยังไม่มีรายงานที่ถูกแชร์</p>
+        </div>
+    </div>
+</div>
+
+<!-- PAGE: RE-INSPECTION -->
+<div id="pg-reinspect" class="page hidden">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+        <div class="px-5 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white flex items-center justify-between">
+            <h2 class="font-bold text-sm flex items-center gap-2"><i class="fas fa-rotate"></i> ตรวจรอบ 2 - ตรวจสอบการแก้ไข</h2>
+            <button onclick="switchPage('report')" class="bg-white/20 px-3 py-1 rounded-lg text-xs font-semibold hover:bg-white/30">กลับ</button>
+        </div>
+        <div class="p-5">
+            <div id="reinspectInfo" class="mb-4"></div>
+        </div>
+    </div>
+    <div id="reinspectItems" class="space-y-3"></div>
+    <div class="mt-4 space-y-2">
+        <button onclick="submitReinspection()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white font-bold text-sm shadow-lg shadow-amber-500/25 active:scale-[0.98] transition flex items-center justify-center gap-2">
+            <i class="fas fa-paper-plane"></i> บันทึกรายงานตรวจรอบ 2
+        </button>
+    </div>
+</div>
+
+<!-- PAGE: COMPARISON REPORT -->
+<div id="pg-compare" class="page hidden">
+    <div id="compareContent"></div>
+</div>
+
+<!-- PAGE: SETTINGS -->
+<div id="pg-settings" class="page hidden space-y-4">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-5 py-4 bg-gradient-to-r from-violet-500 to-violet-600 text-white flex items-center gap-3">
+            <i class="fas fa-link text-lg"></i>
+            <h2 class="font-bold text-sm">การเชื่อมต่อ API</h2>
+        </div>
+        <div class="p-5 space-y-3">
+            <div>
+                <label class="text-xs font-semibold text-gray-500 mb-1 block">API Base URL (Vercel)</label>
+                <input type="url" id="apiUrl" class="w-full px-4 py-2.5 rounded-xl border-2 border-gray-100 focus:border-violet-400 outline-none transition text-sm" placeholder="https://your-app.vercel.app/api">
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-500 mb-1 block">Google Sheets ID</label>
+                <input type="text" id="sheetsId" class="w-full px-4 py-2.5 rounded-xl border-2 border-gray-100 focus:border-violet-400 outline-none transition text-sm" placeholder=" Spreadsheet ID">
+            </div>
+            <button onclick="saveSettings()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-violet-600 text-white font-bold text-sm active:scale-[0.98] transition">
+                <i class="fas fa-save mr-1"></i> บันทึกการตั้งค่า
+            </button>
+        </div>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-5 py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center gap-3">
+            <i class="fas fa-cloud text-lg"></i>
+            <h2 class="font-bold text-sm">สถานะการซิงค์</h2>
+        </div>
+        <div class="p-5 space-y-3">
+            <div class="flex items-center gap-3 p-3 rounded-xl bg-gray-50">
+                <div class="w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}"></div>
+                <div class="flex-1">
+                    <p class="text-sm font-semibold ${isOnline ? 'text-emerald-600' : 'text-rose-600'}">${isOnline ? '🟢 ออนไลน์' : '🔴 ออฟไลน์'}</p>
+                    <p class="text-[11px] text-gray-400">${isOnline ? 'ข้อมูลจะซิงค์ทันที' : 'ข้อมูลจะซิงค์เมื่อกลับมาออนไลน์'}</p>
+                </div>
+            </div>
+            <div id="syncQueueStatus" class="text-sm text-gray-500">
+                ${syncQueue.length > 0 ? `<div class="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                    <i class="fas fa-clock text-amber-500"></i>
+                    <span class="text-amber-700 font-semibold">รอซิงค์ ${syncQueue.length} รายการ</span>
+                    <button onclick="processSyncQueue()" class="ml-auto text-amber-600 hover:text-amber-800 text-xs font-bold">ซิงค์เลย</button>
+                </div>` : '<div class="flex items-center gap-2 p-3 rounded-xl bg-emerald-50">
+                    <i class="fas fa-check-circle text-emerald-500"></i>
+                    <span class="text-emerald-700 text-sm">ซิงค์ข้อมูลครบถ้วน ✓</span>
+                </div>'}
+            </div>
+            <button onclick="processSyncQueue();syncCustomItemsToServer()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm active:scale-[0.98] transition">
+                <i class="fas fa-sync mr-1"></i> บังคับซิงค์ตอนนี้
+            </button>
+        </div>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3">
+        <h3 class="font-bold text-sm text-gray-700 flex items-center gap-2"><i class="fas fa-database text-amber-500"></i> จัดการข้อมูล</h3>
+        <button onclick="exportJSON()" class="w-full py-2.5 rounded-xl bg-amber-50 text-amber-700 font-semibold text-sm border border-amber-200 active:scale-[0.98] transition"><i class="fas fa-download mr-1"></i> ส่งออกข้อมูล (JSON)</button>
+        <button onclick="clearAllData()" class="w-full py-2.5 rounded-xl bg-rose-50 text-rose-700 font-semibold text-sm border border-rose-200 active:scale-[0.98] transition"><i class="fas fa-trash mr-1"></i> ลบข้อมูลทั้งหมด</button>
+    </div>
+</div>
+
+</main>
+
+<!-- ===== PDF Hidden Content ===== -->
+<div id="pdfContent" class="print-only" style="position:absolute;left:-9999px;top:0;width:210mm;"></div>
+
+<!-- ===== SCRIPTS ===== -->
+<script>
+// ===== CONFIG =====
+const API_BASE = localStorage.getItem('apiUrl') || '';
+const SHEETS_ID = localStorage.getItem('sheetsId') || '';
+
+// ===== CHECKLIST DATA =====
+const CHECKLIST = [
+  { id:'structure', title:'โครงสร้างอาคาร', icon:'fa-building', gradient:'from-blue-500 to-blue-600', bg:'bg-blue-50', text:'text-blue-600',
+    items:[
+      {id:'s1',text:'ผนังแตกร้าวหรือไม่'},{id:'s2',text:'คานและเสาอาคารผิดรูปหรือไม่'},
+      {id:'s3',text:'พื้นมีรอยแตกหรือทรุดตัว'},{id:'s4',text:'หลังคารั่วซึมหรือไม่'},
+      {id:'s5',text:'โครงสร้างหลังคาสมบูรณ์'}
+    ]},
+  { id:'electrical', title:'ระบบไฟฟ้า', icon:'fa-bolt', gradient:'from-amber-500 to-amber-600', bg:'bg-amber-50', text:'text-amber-600',
+    items:[
+      {id:'e1',text:'ปลั๊กไฟใช้งานได้ปกติ'},{id:'e2',text:'สวิตช์ไฟทำงานถูกต้อง'},
+      {id:'e3',text:'สายไฟไม่ลอกหรือเสียหาย'},{id:'e4',text:'เบรกเกอร์ไฟทำงานปกติ'},
+      {id:'e5',text:'ระบบไฟดินเชื่อมต่อถูกต้อง'},{id:'e6',text:'ไฟส่องสว่างเพียงพอ'}
+    ]},
+  { id:'plumbing', title:'ระบบประปา', icon:'fa-droplet', gradient:'from-cyan-500 to-cyan-600', bg:'bg-cyan-50', text:'text-cyan-600',
+    items:[
+      {id:'p1',text:'ท่อน้ำไม่รั่วซึม'},{id:'p2',text:'ก๊อกน้ำทำงานปกติ'},
+      {id:'p3',text:'ชักโครกทำงานปกติ'},{id:'p4',text:'ท่อระบายน้ำไม่อุดตัน'},
+      {id:'p5',text:'น้ำไหลแรงเพียงพอ'},{id:'p6',text:'ถังน้ำไม่รั่ว'}
+    ]},
+  { id:'doors', title:'ประตูและหน้าต่าง', icon:'fa-door-open', gradient:'from-emerald-500 to-emerald-600', bg:'bg-emerald-50', text:'text-emerald-600',
+    items:[
+      {id:'d1',text:'ประตูเปิดปิดปกติ'},{id:'d2',text:'ล็อคประตูทำงานปกติ'},
+      {id:'d3',text:'หน้าต่างเปิดปิดได้ปกติ'},{id:'d4',text:'กระจกไม่แตกร้าว'},
+      {id:'d5',text:'ขอบยางซีลไม่เสื่อม'},{id:'d6',text:'มุ้งลวดไม่ขาด'}
+    ]},
+  { id:'floor', title:'พื้นและเพดาน', icon:'fa-layer-group', gradient:'from-violet-500 to-violet-600', bg:'bg-violet-50', text:'text-violet-600',
+    items:[
+      {id:'f1',text:'กระเบื้องไม่แตกหรือหลุด'},{id:'f2',text:'พื้นไม่มีรอยบวมหรือแอ่น'},
+      {id:'f3',text:'เพดานไม่มีรอยรั่วซึม'},{id:'f4',text:'สีผนังไม่ลอกหรือปอก'},
+      {id:'f5',text:'พื้นระเบียงไม่แตกร้าว'},{id:'f6',text:'กระเบื้องมีเสียงกลวง'}
+    ]},
+  { id:'safety', title:'ระบบความปลอดภัย', icon:'fa-shield-halved', gradient:'from-rose-500 to-rose-600', bg:'bg-rose-50', text:'text-rose-600',
+    items:[
+      {id:'sa1',text:'กล้องวงจรปิดทำงานปกติ'},{id:'sa2',text:'ระบบสัญญาณกันขโมยทำงาน'},
+      {id:'sa3',text:'ถังดับเพลิงพร้อมใช้งาน'},{id:'sa4',text:'ทางหนีไฟสะดวก'},
+      {id:'sa5',text:'ราวจับบันไดมั่นคง'}
+    ]},
+  { id:'exterior', title:'ภายนอกอาคาร', icon:'fa-tree', gradient:'from-teal-500 to-teal-600', bg:'bg-teal-50', text:'text-teal-600',
+    items:[
+      {id:'ex1',text:'รั้วรอบบ้านสมบูรณ์'},{id:'ex2',text:'ระบบระบายน้ำภายนอกดี'},
+      {id:'ex3',text:'พื้นที่จอดรถเรียบร้อย'},{id:'ex4',text:'landscape ดูแลดี'},
+      {id:'ex5',text:'กำแพงไม่แตกร้าว'},{id:'ex6',text:'แผ่นหลังคาเรียบร้อย'}
+    ]}
+];
+
+// ===== STATE =====
+let inspections = JSON.parse(localStorage.getItem('inspections') || '[]');
+let housePhotos = []; // base64 array
+let currentInspection = null;
+
+// { [itemId]: { status:'pass'|'fail'|'na', issues: [{ note:'', photos:[] }] } }
+let inspectionData = {};
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('inspectionDate').valueAsDate = new Date();
+    loadSaved();
+    loadSettings();
+    renderChecklist();
+    renderHistory();
+});
+
+// ===== NAV =====
+function switchPage(id) {
+    document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+    document.getElementById('pg-' + id).classList.remove('hidden');
+    document.getElementById('pg-' + id).classList.add('anim-slide-up');
+    document.querySelectorAll('.nav-btn').forEach(b => {
+        b.classList.remove('active','text-brand-600','border-brand-500');
+        b.classList.add('text-gray-400','border-transparent');
+    });
+    const active = document.querySelector(`.nav-btn[data-page="${id}"]`);
+    active.classList.add('active','text-brand-600','border-brand-500');
+    active.classList.remove('text-gray-400','border-transparent');
+    window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ===== HOUSE PHOTOS =====
+function handleHousePhotos(input) {
+    Array.from(input.files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            housePhotos.push(e.target.result);
+            renderHousePhotos();
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function renderHousePhotos() {
+    const grid = document.getElementById('housePhotoGrid');
+    grid.innerHTML = housePhotos.map((src, i) => `
+        <div class="relative group">
+            <img src="${src}" class="w-full aspect-square object-cover rounded-xl border-2 border-white shadow-sm">
+            <button onclick="removeHousePhoto(${i})" class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 text-white rounded-full text-[10px] flex items-center justify-center shadow opacity-80 hover:opacity-100"><i class="fas fa-xmark"></i></button>
+        </div>
+    `).join('');
+}
+
+function removeHousePhoto(i) {
+    housePhotos.splice(i, 1);
+    renderHousePhotos();
+}
+
+// ===== CHECKLIST RENDER =====
+function renderChecklist() {
+    const c = document.getElementById('checklistContainer');
+    c.innerHTML = CHECKLIST.map((sec, si) => {
+        const allItems = getSectionItems(sec.id);
+        const totalItems = allItems.length;
+        const customCount = (customItems[sec.id] || []).length;
+        return `
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <button onclick="toggleSection('${sec.id}')" class="w-full px-5 py-4 flex items-center gap-3 active:bg-gray-50 transition" id="secHead-${sec.id}">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br ${sec.gradient} flex items-center justify-center text-white shadow-md text-sm">
+                    <i class="fas ${sec.icon}"></i>
+                </div>
+                <div class="flex-1 text-left">
+                    <h3 class="text-sm font-bold text-gray-800">${sec.title}</h3>
+                    <p class="text-[11px] text-gray-400">${totalItems} รายการ${customCount > 0 ? ` <span class="text-amber-500">(+${customCount} ที่เพิ่มเอง)</span>` : ''}</p>
+                </div>
+                <span class="sec-badge text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-400" id="secBadge-${sec.id}">0/${totalItems}</span>
+                <i class="fas fa-chevron-down text-gray-300 text-xs transition-transform duration-300" id="secChevron-${sec.id}"></i>
+            </button>
+            <div class="hidden px-3 pb-3 space-y-0" id="secBody-${sec.id}">
+                ${allItems.map(it => renderItem(it, sec.id)).join('')}
+                <button onclick="openAddItemModal('${sec.id}')" class="w-full mt-2 py-2.5 border-2 border-dashed border-amber-200 rounded-xl text-amber-500 text-xs font-semibold bg-amber-50/50 hover:bg-amber-50 transition flex items-center justify-center gap-1">
+                    <i class="fas fa-plus"></i> เพิ่มรายการใหม่
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+
+    // Update stats after render
+    updateStats();
+
+    // Open first
+    if (CHECKLIST.length) toggleSection(CHECKLIST[0].id);
+}
+
+function renderItem(item, sectionId) {
+    if (!inspectionData[item.id]) inspectionData[item.id] = { status:null, issues:[] };
+    const isCustom = item.isCustom;
+    return `
+    <div class="border-t border-gray-50 py-3" id="item-${item.id}">
+        <div class="flex items-start gap-3 px-2">
+            <div class="flex-1">
+                <div class="flex items-center gap-1">
+                    <p class="text-sm font-medium text-gray-700">${item.text}</p>
+                    ${isCustom ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-600">CUSTOM</span>` : ''}
+                </div>
+                <div class="flex items-center gap-2 mt-2">
+                    <button onclick="setStatus('${item.id}','pass')" class="sbtn pass px-3 py-1.5 rounded-full text-[11px] font-bold border-2 transition" id="btn-${item.id}-pass">
+                        <i class="fas fa-check mr-0.5"></i> ผ่าน
+                    </button>
+                    <button onclick="setStatus('${item.id}','fail')" class="sbtn fail px-3 py-1.5 rounded-full text-[11px] font-bold border-2 transition" id="btn-${item.id}-fail">
+                        <i class="fas fa-xmark mr-0.5"></i> มีปัญหา
+                    </button>
+                    <button onclick="setStatus('${item.id}','na')" class="sbtn na px-3 py-1.5 rounded-full text-[11px] font-bold border-2 transition" id="btn-${item.id}-na">
+                        N/A
+                    </button>
+                    ${isCustom ? `
+                    <button onclick="openEditItemModal('${sectionId}','${item.id}')" class="ml-auto text-amber-400 hover:text-amber-600 transition p-1">
+                        <i class="fas fa-pen text-[10px]"></i>
+                    </button>
+                    <button onclick="deleteCustomItem('${sectionId}','${item.id}')" class="text-rose-300 hover:text-rose-500 transition p-1">
+                        <i class="fas fa-trash text-[10px]"></i>
+                    </button>` : ''}
+                </div>
+            </div>
+            <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 border-2 border-gray-200 transition-all" id="icon-${item.id}">
+                <i class="fas fa-minus text-[10px] text-gray-300"></i>
+            </div>
+        </div>
+
+        <!-- Issues Container (shown when status=fail) -->
+        <div class="hidden mt-3 mx-2" id="issues-${item.id}">
+            <div id="issuesList-${item.id}" class="space-y-2"></div>
+            <button onclick="addIssue('${item.id}')" class="w-full py-2 border-2 border-dashed border-rose-200 rounded-xl text-rose-400 text-xs font-semibold bg-rose-50/50 hover:bg-rose-50 transition mt-2">
+                <i class="fas fa-plus mr-1"></i> เพิ่มจุดปัญหา
+            </button>
+        </div>
+    </div>`;
+}
+
+// ===== STATUS =====
+function setStatus(id, status) {
+    const d = inspectionData[id];
+    if (d.status === status) {
+        d.status = null;
+        if (status === 'fail') d.issues = [];
+    } else {
+        d.status = status;
+        if (status === 'fail' && d.issues.length === 0) {
+            d.issues.push({ note:'', photos:[] });
+        }
+    }
+    updateItemUI(id);
+    updateStats();
+    saveLocal();
+}
+
+function updateItemUI(id) {
+    const d = inspectionData[id];
+    ['pass','fail','na'].forEach(s => {
+        const btn = document.getElementById(`btn-${id}-${s}`);
+        btn.classList.remove('bg-emerald-500','border-emerald-500','text-white',
+                             'bg-rose-500','border-rose-500','text-white',
+                             'bg-gray-400','border-gray-400','text-white');
+        btn.classList.add(s==='pass'?'border-emerald-300':s==='fail'?'border-rose-300':'border-gray-200',
+                          s==='pass'?'text-emerald-600':s==='fail'?'text-rose-600':'text-gray-400');
+    });
+    const icon = document.getElementById(`icon-${id}`);
+    icon.className = 'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 border-2 transition-all';
+
+    if (d.status === 'pass') {
+        document.getElementById(`btn-${id}-pass`).classList.add('bg-emerald-500','border-emerald-500','text-white');
+        icon.classList.add('bg-emerald-500','border-emerald-500');
+        icon.innerHTML = '<i class="fas fa-check text-white text-[10px]"></i>';
+    } else if (d.status === 'fail') {
+        document.getElementById(`btn-${id}-fail`).classList.add('bg-rose-500','border-rose-500','text-white');
+        icon.classList.add('bg-rose-500','border-rose-500');
+        icon.innerHTML = '<i class="fas fa-exclamation text-white text-[10px]"></i>';
+        document.getElementById(`issues-${id}`).classList.remove('hidden');
+        renderIssues(id);
+    } else if (d.status === 'na') {
+        document.getElementById(`btn-${id}-na`).classList.add('bg-gray-400','border-gray-400','text-white');
+        icon.classList.add('bg-gray-300','border-gray-300');
+        icon.innerHTML = '<i class="fas fa-minus text-white text-[10px]"></i>';
+        document.getElementById(`issues-${id}`).classList.add('hidden');
+    } else {
+        icon.innerHTML = '<i class="fas fa-minus text-gray-300 text-[10px]"></i>';
+        icon.classList.add('border-gray-200');
+        document.getElementById(`issues-${id}`).classList.add('hidden');
+    }
+}
+
+// ===== ISSUES (MULTIPLE) =====
+function addIssue(itemId) {
+    inspectionData[itemId].issues.push({ note:'', photos:[] });
+    renderIssues(itemId);
+}
+
+function removeIssue(itemId, idx) {
+    inspectionData[itemId].issues.splice(idx, 1);
+    if (inspectionData[itemId].issues.length === 0) {
+        setStatus(itemId, null);
+    } else {
+        renderIssues(itemId);
+    }
+}
+
+function renderIssues(itemId) {
+    const list = document.getElementById(`issuesList-${itemId}`);
+    const issues = inspectionData[itemId].issues;
+    list.innerHTML = issues.map((issue, i) => `
+        <div class="bg-rose-50 border border-rose-100 rounded-xl p-3 anim-scale">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-[11px] font-bold text-rose-500">จุดที่ ${i+1}</span>
+                ${issues.length > 1 ? `<button onclick="removeIssue('${itemId}',${i})" class="text-rose-300 hover:text-rose-500 text-xs"><i class="fas fa-trash-can"></i></button>` : ''}
+            </div>
+            <textarea class="w-full px-3 py-2 rounded-lg border border-rose-200 bg-white text-sm focus:border-rose-400 outline-none resize-none mb-2" rows="2"
+                placeholder="กรอกรายละเอียดปัญหา..." oninput="updateIssueNote('${itemId}',${i},this.value)">${issue.note}</textarea>
+            <div class="photo-grid mb-2" id="issuePhotos-${itemId}-${i}">
+                ${issue.photos.map((src, pi) => `
+                    <div class="relative">
+                        <img src="${src}" class="w-full aspect-square object-cover rounded-lg border border-white shadow-sm">
+                        <button onclick="removeIssuePhoto('${itemId}',${i},${pi})" class="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white rounded-full text-[8px] flex items-center justify-center"><i class="fas fa-xmark"></i></button>
+                    </div>
+                `).join('')}
+            </div>
+            <label class="flex items-center justify-center gap-1 w-full py-2 border border-dashed border-rose-200 rounded-lg bg-white text-rose-400 text-[11px] font-semibold cursor-pointer hover:bg-rose-100/50 transition">
+                <i class="fas fa-camera"></i> ถ่ายรูป
+                <input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="handleIssuePhoto('${itemId}',${i},this)">
+            </label>
+        </div>
+    `).join('');
+}
+
+function updateIssueNote(itemId, idx, val) { inspectionData[itemId].issues[idx].note = val; }
+
+function handleIssuePhoto(itemId, idx, input) {
+    Array.from(input.files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            inspectionData[itemId].issues[idx].photos.push(e.target.result);
+            renderIssues(itemId);
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function removeIssuePhoto(itemId, issueIdx, photoIdx) {
+    inspectionData[itemId].issues[issueIdx].photos.splice(photoIdx, 1);
+    renderIssues(itemId);
+}
+
+// ===== STATS =====
+function updateStats() {
+    let pass=0, fail=0, total=0;
+    CHECKLIST.forEach(s => {
+        getSectionItems(s.id).forEach(it => {
+            total++;
+            const st = inspectionData[it.id]?.status;
+            if (st==='pass') pass++; else if (st==='fail') fail++;
+        });
+    });
+    const pending = total - pass - fail;
+    const checked = pass + fail;
+    document.getElementById('statPass').textContent = pass;
+    document.getElementById('statFail').textContent = fail;
+    document.getElementById('statPending').textContent = pending;
+    document.getElementById('progressText').textContent = `${checked} / ${total}`;
+    document.getElementById('progressBar').style.width = (total ? checked/total*100 : 0) + '%';
+
+    // Section badges
+    CHECKLIST.forEach(sec => {
+        let sp=0;
+        const allItems = getSectionItems(sec.id);
+        allItems.forEach(it => { if(inspectionData[it.id]?.status) sp++; });
+        const badge = document.getElementById(`secBadge-${sec.id}`);
+        badge.textContent = `${sp}/${allItems.length}`;
+        badge.className = `sec-badge text-[10px] font-bold px-2 py-0.5 rounded-full ${sp===allItems.length && allItems.length>0 ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-400'}`;
+    });
+}
+
+// ===== TOGGLE SECTION =====
+function toggleSection(id) {
+    const body = document.getElementById(`secBody-${id}`);
+    const chevron = document.getElementById(`secChevron-${id}`);
+    const isHidden = body.classList.contains('hidden');
+    body.classList.toggle('hidden');
+    chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0)';
+}
+
+// ===== SUBMIT =====
+function submitInspection() {
+    const owner = document.getElementById('ownerName').value.trim();
+    const addr = document.getElementById('address').value.trim();
+    if (!owner || !addr) return showToast('กรุณากรอกชื่อเจ้าของบ้านและที่อยู่','error');
+
+    const checked = Object.values(inspectionData).filter(d => d.status !== null).length;
+    if (checked === 0) return showToast('กรุณาตรวจเช็คอย่างน้อย 1 รายการ','error');
+
+    const report = {
+        id: Date.now(),
+        date: document.getElementById('inspectionDate').value,
+        ownerName: owner,
+        address: addr,
+        houseType: document.getElementById('houseType').value,
+        inspectorName: document.getElementById('inspectorName').value,
+        housePhotos: [...housePhotos],
+        data: JSON.parse(JSON.stringify(inspectionData)),
+        timestamp: new Date().toISOString()
+    };
+
+    inspections.unshift(report);
+    localStorage.setItem('inspections', JSON.stringify(inspections));
+    savePropertyInfo();
+    currentInspection = report;
+    generateReport(report);
+
+    // Sync to API (online or queue for offline)
+    syncToAPI(report);
+
+    const msg = isOnline ? 'บันทึกรายงานสำเร็จ! ✓' : 'บันทึกลงเครื่อง - จะซิงค์เมื่อมีสัญญาณ 📡';
+    showToast(msg, 'success');
+    setTimeout(() => switchPage('report'), 400);
+}
+
+// ===== REPORT =====
+function generateReport(r) {
+    const c = document.getElementById('reportContent');
+    let pass=0,fail=0,na=0;
+    Object.values(r.data).forEach(d => { if(d.status==='pass')pass++; else if(d.status==='fail')fail++; else if(d.status==='na')na++; });
+
+    let html = `
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4 anim-slide-up">
+        <div class="px-5 py-4 bg-gradient-to-r from-brand-500 to-violet-600 text-white">
+            <h2 class="font-bold flex items-center gap-2"><i class="fas fa-clipboard-check"></i> สรุปรายงานตรวจเช็ค</h2>
+        </div>
+        <div class="p-5">
+            <div class="grid grid-cols-2 gap-2 text-sm mb-4">
+                <div><span class="text-gray-400 text-xs">วันที่:</span><br><b>${r.date}</b></div>
+                <div><span class="text-gray-400 text-xs">ประเภท:</span><br><b>${r.houseType||'-'}</b></div>
+                <div><span class="text-gray-400 text-xs">เจ้าของ:</span><br><b>${r.ownerName}</b></div>
+                <div><span class="text-gray-400 text-xs">ผู้ตรวจ:</span><br><b>${r.inspectorName||'-'}</b></div>
+            </div>
+            <div class="text-sm mb-4"><span class="text-gray-400 text-xs">ที่อยู่:</span><br><b>${r.address}</b></div>`;
+
+    // House photos
+    if (r.housePhotos && r.housePhotos.length) {
+        html += `<div class="mb-4"><p class="text-xs font-semibold text-gray-400 mb-2">📸 รูปหน้าบ้าน</p><div class="photo-grid">${r.housePhotos.map(src=>`<img src="${src}" class="w-full aspect-square object-cover rounded-xl border">`).join('')}</div></div>`;
+    }
+
+    html += `
+            <div class="grid grid-cols-3 gap-3">
+                <div class="bg-emerald-50 rounded-xl p-3 text-center"><div class="text-2xl font-extrabold text-emerald-600">${pass}</div><div class="text-[10px] font-semibold text-emerald-500">ผ่าน</div></div>
+                <div class="bg-rose-50 rounded-xl p-3 text-center"><div class="text-2xl font-extrabold text-rose-600">${fail}</div><div class="text-[10px] font-semibold text-rose-500">ปัญหา</div></div>
+                <div class="bg-gray-50 rounded-xl p-3 text-center"><div class="text-2xl font-extrabold text-gray-400">${na}</div><div class="text-[10px] font-semibold text-gray-400">N/A</div></div>
+            </div>
+        </div>
+    </div>`;
+
+    // Issues Summary
+    const issues = [];
+    CHECKLIST.forEach(sec => sec.items.forEach(it => {
+        const d = r.data[it.id];
+        if (d?.status === 'fail' && d.issues?.length) {
+            d.issues.forEach(iss => issues.push({ section:sec.title, item:it.text, note:iss.note, photos:iss.photos }));
+        }
+    }));
+
+    if (issues.length) {
+        html += `<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4 anim-slide-up">
+            <div class="px-5 py-4 bg-gradient-to-r from-rose-500 to-rose-600 text-white flex items-center justify-between">
+                <h2 class="font-bold flex items-center gap-2"><i class="fas fa-triangle-exclamation"></i> จุดที่ต้องแก้ไข</h2>
+                <span class="bg-white/20 px-2.5 py-0.5 rounded-full text-xs font-bold">${issues.length}</span>
+            </div>
+            <div class="p-5 space-y-3">`;
+
+        issues.forEach((iss, idx) => {
+            html += `<div class="border border-rose-100 rounded-xl overflow-hidden">
+                <div class="px-4 py-3 bg-rose-50 flex items-center justify-between">
+                    <div>
+                        <span class="text-[10px] font-semibold text-rose-400 uppercase tracking-wide">${iss.section}</span>
+                        <h4 class="text-sm font-bold text-gray-800">${idx+1}. ${iss.item}</h4>
+                    </div>
+                    <span class="bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">แก้ไข</span>
+                </div>
+                <div class="px-4 py-3">
+                    ${iss.note ? `<p class="text-sm text-gray-600 mb-2"><i class="fas fa-circle-info text-rose-400 mr-1"></i>${iss.note}</p>` : ''}
+                    ${iss.photos?.length ? `<div class="photo-grid">${iss.photos.map(src=>`<img src="${src}" class="w-full aspect-square object-cover rounded-lg border">`).join('')}</div>` : ''}
+                </div>
+            </div>`;
+        });
+
+        html += `</div></div>`;
+    }
+
+    // Full Results
+    html += `<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4 anim-slide-up">
+        <div class="px-5 py-4 bg-gradient-to-r from-gray-700 to-gray-800 text-white">
+            <h2 class="font-bold flex items-center gap-2"><i class="fas fa-list-check"></i> ผลการตรวจทั้งหมด</h2>
+        </div>
+        <div class="p-5 space-y-4">`;
+
+    CHECKLIST.forEach(sec => {
+        let has = false, sh = '';
+        sec.items.forEach(it => {
+            const d = r.data[it.id];
+            if (d?.status) {
+                has = true;
+                const label = d.status==='pass'?'ผ่าน':d.status==='fail'?'มีปัญหา':'N/A';
+                const cls = d.status==='pass'?'emerald':d.status==='fail'?'rose':'gray';
+                sh += `<div class="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+                    <div class="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 bg-${cls}-500">
+                        <i class="fas ${d.status==='pass'?'fa-check':d.status==='fail'?'fa-xmark':'fa-minus'} text-white text-[9px]"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-gray-700">${it.text}</p>
+                        ${d.status==='fail'&&d.issues?.length ? d.issues.map(is => `<p class="text-xs text-rose-500 mt-1"><i class="fas fa-circle text-[4px] mr-1"></i>${is.note||'ไม่มีรายละเอียด'}</p>`).join('') : ''}
+                    </div>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-${cls}-50 text-${cls}-600 flex-shrink-0">${label}</span>
+                </div>`;
+            }
+        });
+        if (has) html += `<div><h4 class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1.5"><div class="w-1.5 h-1.5 rounded-full bg-brand-400"></div>${sec.title}</h4>${sh}</div>`;
+    });
+
+    html += `</div></div>`;
+
+    // Action buttons
+    // Check if this inspection has issues
+    const hasIssues = issues.length > 0;
+
+    html += `<div class="flex gap-2">
+        <button onclick="generatePDF()" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white font-bold text-sm shadow-lg shadow-brand-500/20 active:scale-[0.98] transition flex items-center justify-center gap-2">
+            <i class="fas fa-file-pdf"></i> PDF
+        </button>
+        <button onclick="shareReport()" class="py-3 px-4 rounded-xl bg-gradient-to-r from-violet-500 to-violet-600 text-white font-bold text-sm shadow-lg shadow-violet-500/20 active:scale-[0.98] transition flex items-center justify-center gap-2">
+            <i class="fas fa-share-nodes"></i>
+        </button>
+        ${hasIssues ? `<button onclick="startReinspection()" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-sm shadow-lg shadow-amber-500/20 active:scale-[0.98] transition flex items-center justify-center gap-2">
+            <i class="fas fa-rotate"></i> ตรวจรอบ 2
+        </button>` : ''}
+    </div>`;
+
+    c.innerHTML = html;
+}
+
+// ===== PDF GENERATION =====
+function generatePDF() {
+    if (!currentInspection) return showToast('ไม่มีรายงานให้ Export','error');
+    showToast('กำลังสร้าง PDF...','');
+
+    const r = currentInspection;
+    let pass=0,fail=0,na=0;
+    Object.values(r.data).forEach(d => { if(d.status==='pass')pass++; else if(d.status==='fail')fail++; else if(d.status==='na')na++; });
+    const total = pass+fail+na;
+
+    // Collect issues
+    const issues = [];
+    CHECKLIST.forEach(sec => sec.items.forEach(it => {
+        const d = r.data[it.id];
+        if (d?.status === 'fail' && d.issues?.length) {
+            d.issues.forEach(iss => issues.push({ section:sec.title, item:it.text, note:iss.note, photos:iss.photos||[] }));
+        }
+    }));
+
+    const el = document.getElementById('pdfContent');
+    el.style.position = 'absolute';
+    el.style.left = '0';
+    el.style.top = '0';
+    el.style.width = '210mm';
+
+    el.innerHTML = `
+    <div style="font-family:'IBM Plex Sans Thai',sans-serif;color:#1f2937;line-height:1.6;">
+
+    <!-- ===== COVER PAGE ===== -->
+    <div style="width:210mm;min-height:297mm;padding:20mm;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);color:white;page-break-after:always;">
+        <div style="text-align:center;">
+            <div style="width:100px;height:100px;margin:0 auto 30px;background:rgba(255,255,255,0.15);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:48px;">🏠</div>
+            <h1 style="font-size:36px;font-weight:800;margin-bottom:8px;letter-spacing:-0.5px;">รายงานตรวจเช็คบ้าน</h1>
+            <p style="font-size:16px;opacity:0.85;margin-bottom:40px;">House Inspection Report</p>
+            <div style="background:rgba(255,255,255,0.15);border-radius:16px;padding:24px 40px;display:inline-block;text-align:left;font-size:15px;line-height:2;">
+                <div><strong>วันที่ตรวจ:</strong> ${r.date}</div>
+                <div><strong>เจ้าของบ้าน:</strong> ${r.ownerName}</div>
+                <div><strong>ที่อยู่:</strong> ${r.address}</div>
+                <div><strong>ประเภทบ้าน:</strong> ${r.houseType||'-'}</div>
+                <div><strong>ผู้ตรวจ:</strong> ${r.inspectorName||'-'}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== SUMMARY PAGE ===== -->
+    <div style="width:210mm;padding:15mm 20mm;page-break-after:always;">
+        <h2 style="font-size:22px;font-weight:700;color:#2563eb;margin-bottom:20px;border-bottom:3px solid #2563eb;padding-bottom:8px;">📊 สรุปผลการตรวจ</h2>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:14px;">
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;width:30%;font-weight:600;">วันที่ตรวจ</td><td style="padding:8px;border:1px solid #e5e7eb;">${r.date}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600;">เจ้าของบ้าน</td><td style="padding:8px;border:1px solid #e5e7eb;">${r.ownerName}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600;">ที่อยู่</td><td style="padding:8px;border:1px solid #e5e7eb;">${r.address}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600;">ประเภทบ้าน</td><td style="padding:8px;border:1px solid #e5e7eb;">${r.houseType||'-'}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600;">ผู้ตรวจ</td><td style="padding:8px;border:1px solid #e5e7eb;">${r.inspectorName||'-'}</td></tr>
+        </table>
+
+        <!-- House Photos -->
+        ${r.housePhotos?.length ? `<div style="margin-bottom:20px;"><h3 style="font-size:16px;font-weight:600;margin-bottom:10px;">📸 รูปหน้าบ้าน</h3><div style="display:flex;flex-wrap:wrap;gap:8px;">${r.housePhotos.map(src=>`<img src="${src}" style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:2px solid #e5e7eb;">`).join('')}</div></div>` : ''}
+
+        <!-- Stats -->
+        <div style="display:flex;gap:12px;margin-bottom:20px;">
+            <div style="flex:1;text-align:center;padding:16px;background:#ecfdf5;border-radius:12px;border:2px solid #d1fae5;">
+                <div style="font-size:36px;font-weight:800;color:#059669;">${pass}</div>
+                <div style="font-size:12px;color:#059669;font-weight:600;">ผ่าน ✓</div>
+            </div>
+            <div style="flex:1;text-align:center;padding:16px;background:#fff1f2;border-radius:12px;border:2px solid #fecdd3;">
+                <div style="font-size:36px;font-weight:800;color:#e11d48;">${fail}</div>
+                <div style="font-size:12px;color:#e11d48;font-weight:600;">ปัญหา ✗</div>
+            </div>
+            <div style="flex:1;text-align:center;padding:16px;background:#f3f4f6;border-radius:12px;border:2px solid #e5e7eb;">
+                <div style="font-size:36px;font-weight:800;color:#9ca3af;">${na}</div>
+                <div style="font-size:12px;color:#9ca3af;font-weight:600;">N/A</div>
+            </div>
+        </div>
+
+        ${issues.length ? `
+        <h3 style="font-size:16px;font-weight:600;color:#e11d48;margin-bottom:12px;">⚠️ จุดที่ต้องแก้ไข (${issues.length} รายการ)</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead><tr style="background:#fff1f2;"><th style="padding:8px;border:1px solid #fecdd3;text-align:left;width:5%;">#</th><th style="padding:8px;border:1px solid #fecdd3;text-align:left;width:15%;">หมวด</th><th style="padding:8px;border:1px solid #fecdd3;text-align:left;width:25%;">รายการ</th><th style="padding:8px;border:1px solid #fecdd3;text-align:left;width:30%;">รายละเอียด</th><th style="padding:8px;border:1px solid #fecdd3;text-align:left;width:25%;">รูปภาพ</th></tr></thead>
+            <tbody>
+            ${issues.map((iss,i)=>`<tr>
+                <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;font-weight:700;">${i+1}</td>
+                <td style="padding:8px;border:1px solid #e5e7eb;">${iss.section}</td>
+                <td style="padding:8px;border:1px solid #e5e7eb;font-weight:500;">${iss.item}</td>
+                <td style="padding:8px;border:1px solid #e5e7eb;">${iss.note||'-'}</td>
+                <td style="padding:8px;border:1px solid #e5e7eb;">${iss.photos.length ? iss.photos.map(src=>`<img src="${src}" style="width:60px;height:60px;object-fit:cover;border-radius:4px;display:inline-block;margin:2px;">`).join('') : '-'}</td>
+            </tr>`).join('')}
+            </tbody>
+        </table>` : '<div style="text-align:center;padding:30px;background:#ecfdf5;border-radius:12px;"><p style="font-size:18px;font-weight:700;color:#059669;">✅ ผ่านทุกรายการ ไม่มีปัญหา!</p></div>'}
+    </div>
+
+    <!-- ===== DETAIL PAGES ===== -->
+    <div style="width:210mm;padding:15mm 20mm;page-break-after:always;">
+        <h2 style="font-size:22px;font-weight:700;color:#2563eb;margin-bottom:20px;border-bottom:3px solid #2563eb;padding-bottom:8px;">📋 รายละเอียดผลการตรวจ</h2>
+        ${CHECKLIST.map(sec => {
+            let rows = '';
+            sec.items.forEach(it => {
+                const d = r.data[it.id];
+                if (!d?.status) return;
+                const label = d.status==='pass'?'ผ่าน':d.status==='fail'?'มีปัญหา':'N/A';
+                const bg = d.status==='pass'?'#ecfdf5':d.status==='fail'?'#fff1f2':'#f3f4f6';
+                const fg = d.status==='pass'?'#059669':d.status==='fail'?'#e11d48':'#9ca3af';
+                let detail = '';
+                if (d.status==='fail' && d.issues?.length) {
+                    detail = d.issues.map(is => {
+                        let ph = is.photos?.length ? `<div style="margin-top:4px;">${is.photos.map(src=>`<img src="${src}" style="width:50px;height:50px;object-fit:cover;border-radius:4px;display:inline-block;margin:2px;">`).join('')}</div>` : '';
+                        return `<div style="margin-bottom:4px;"><span style="color:#e11d48;font-size:12px;">• ${is.note||'ไม่มีรายละเอียด'}</span>${ph}</div>`;
+                    }).join('');
+                }
+                rows += `<tr>
+                    <td style="padding:8px;border:1px solid #e5e7eb;font-weight:500;font-size:13px;">${it.text}</td>
+                    <td style="padding:8px;border:1px solid #e5e7eb;background:${bg};text-align:center;font-weight:700;color:${fg};font-size:12px;">${label}</td>
+                    <td style="padding:8px;border:1px solid #e5e7eb;font-size:12px;">${detail||'-'}</td>
+                </tr>`;
+            });
+            if (!rows) return '';
+            return `<h3 style="font-size:15px;font-weight:600;margin:16px 0 8px;color:#374151;">${sec.title}</h3>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px;">
+                <thead><tr style="background:#f9fafb;"><th style="padding:8px;border:1px solid #e5e7eb;text-align:left;width:35%;">รายการ</th><th style="padding:8px;border:1px solid #e5e7eb;text-align:center;width:15%;">ผลลัพธ์</th><th style="padding:8px;border:1px solid #e5e7eb;text-align:left;width:50%;">รายละเอียด / รูปภาพ</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+        }).join('')}
+    </div>
+
+    <!-- ===== SIGNATURE PAGE ===== -->
+    <div style="width:210mm;padding:20mm;min-height:297mm;display:flex;flex-direction:column;justify-content:space-between;">
+        <div>
+            <h2 style="font-size:22px;font-weight:700;color:#2563eb;margin-bottom:20px;border-bottom:3px solid #2563eb;padding-bottom:8px;">📝 ลงลายมือชื่อ</h2>
+            <p style="font-size:14px;color:#6b7280;margin-bottom:40px;">ข้าพเจ้าได้ทำการตรวจเช็คทรัพย์สินดังกล่าวข้างต้นด้วยความเรียบร้อย</p>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:40px;">
+            <div style="flex:1;text-align:center;">
+                <div style="height:80px;border-bottom:2px dashed #d1d5db;margin-bottom:8px;"></div>
+                <p style="font-size:14px;font-weight:600;">ผู้ตรวจ (${r.inspectorName||'...........'})</p>
+                <p style="font-size:12px;color:#9ca3af;">วันที่ ${r.date}</p>
+            </div>
+            <div style="flex:1;text-align:center;">
+                <div style="height:80px;border-bottom:2px dashed #d1d5db;margin-bottom:8px;"></div>
+                <p style="font-size:14px;font-weight:600;">เจ้าของบ้าน (${r.ownerName})</p>
+                <p style="font-size:12px;color:#9ca3af;">วันที่ ${r.date}</p>
+            </div>
+        </div>
+        <div style="text-align:center;margin-top:40px;padding-top:20px;border-top:1px solid #e5e7eb;">
+            <p style="font-size:11px;color:#d1d5db;">รายงานนี้สร้างโดย Uchi Kakunin Setsubi System • ${new Date().toLocaleDateString('th-TH')}</p>
+        </div>
+    </div>
+
+    </div>`;
+
+    // Generate PDF
+    const opt = {
+        margin: 0,
+        filename: `inspection-report-${r.date}-${r.ownerName}.pdf`,
+        image: { type:'jpeg', quality:0.85 },
+        html2canvas: { scale:2, useCORS:true, letterRendering:true },
+        jsPDF: { unit:'mm', format:'a4', orientation:'portrait' },
+        pagebreak: { mode:['css','legacy'] }
+    };
+
+    html2pdf().set(opt).from(el).save().then(() => {
+        showToast('สร้าง PDF สำเร็จ! ✓','success');
+        el.style.left = '-9999px';
+    }).catch(err => {
+        showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+        el.style.left = '-9999px';
+    });
+}
+
+// ===== HISTORY =====
+function renderHistory() {
+    const c = document.getElementById('historyContent');
+    if (!inspections.length) {
+        c.innerHTML = `<div class="text-center py-16"><div class="w-20 h-20 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-4"><i class="fas fa-clock-rotate-left text-3xl text-gray-300"></i></div><h3 class="font-bold text-gray-400">ยังไม่มีประวัติ</h3></div>`;
+        return;
+    }
+    c.innerHTML = inspections.map(r => {
+        let p=0,f=0;
+        Object.values(r.data).forEach(d=>{if(d.status==='pass')p++;else if(d.status==='fail')f++;});
+        return `<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-3 active:scale-[0.98] transition cursor-pointer" onclick="viewHistory(${r.id})">
+            <div class="flex items-center justify-between mb-1">
+                <span class="text-[11px] text-gray-400 flex items-center gap-1"><i class="fas fa-calendar"></i> ${r.date} ${r.houseType?'• '+r.houseType:''}</span>
+                ${f>0?`<span class="text-[10px] font-bold bg-rose-100 text-rose-600 px-2 py-0.5 rounded-full">${f} ปัญหา</span>`:`<span class="text-[10px] font-bold bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full">ผ่านทั้งหมด</span>`}
+            </div>
+            <h4 class="text-sm font-bold text-gray-800">${r.address}</h4>
+            <p class="text-xs text-gray-400 mt-1">เจ้าของ: ${r.ownerName}</p>
+            <div class="flex gap-2 mt-2">
+                <span class="text-[10px] font-bold bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">✓ ${p} ผ่าน</span>
+                ${f?`<span class="text-[10px] font-bold bg-rose-50 text-rose-600 px-2 py-0.5 rounded-full">✗ ${f} ปัญหา</span>`:''}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function viewHistory(id) {
+    const r = inspections.find(x=>x.id===id);
+    if (r) { currentInspection=r; generateReport(r); switchPage('report'); }
+}
+
+// ===== SETTINGS =====
+function loadSettings() {
+    document.getElementById('apiUrl').value = localStorage.getItem('apiUrl') || '';
+    document.getElementById('sheetsId').value = localStorage.getItem('sheetsId') || '';
+}
+function saveSettings() {
+    localStorage.setItem('apiUrl', document.getElementById('apiUrl').value.trim());
+    localStorage.setItem('sheetsId', document.getElementById('sheetsId').value.trim());
+    showToast('บันทึกการตั้งค่าสำเร็จ!','success');
+}
+
+// ===== LOCAL STORAGE =====
+function saveLocal() { localStorage.setItem('inspectionData', JSON.stringify(inspectionData)); }
+function savePropertyInfo() {
+    ['ownerName','address','houseType','inspectorName'].forEach(f => localStorage.setItem(f, document.getElementById(f).value));
+}
+function loadSaved() {
+    const d = localStorage.getItem('inspectionData');
+    if (d) inspectionData = JSON.parse(d);
+    ['ownerName','address','houseType','inspectorName'].forEach(f => {
+        const v = localStorage.getItem(f);
+        if (v) document.getElementById(f).value = v;
+    });
+    const hp = localStorage.getItem('housePhotos');
+    if (hp) { housePhotos = JSON.parse(hp); renderHousePhotos(); }
+}
+
+// ===== API SYNC =====
+async function syncToAPI(r) {
+    if (!isOnline || !API_BASE || !authToken) {
+        // Offline - add to sync queue
+        addToSyncQueue('create_inspection', r);
+        return;
+    }
+    try {
+        const res = await fetch(`${API_BASE}/inspections`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+            body: JSON.stringify(r)
+        });
+        if (!res.ok) throw new Error('Sync failed');
+    } catch(e) {
+        addToSyncQueue('create_inspection', r);
+    }
+}
+async function syncData() {
+    if (!API_BASE) return showToast('กรุณาตั้งค่า API URL ก่อน','error');
+    try { const res = await fetch(`${API_BASE}/inspections`); if(res.ok) { const d = await res.json(); showToast(`ซิงค์สำเร็จ: ${d.count||0} รายการ`,'success'); } } catch(e) { showToast('ไม่สามารถซิงค์ได้','error'); }
+}
+
+// ===== EXPORT =====
+function exportJSON() {
+    const blob = new Blob([JSON.stringify({inspections, housePhotos, exportDate:new Date().toISOString()}, null, 2)], {type:'application/json'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `house-check-${new Date().toISOString().split('T')[0]}.json`; a.click();
+    showToast('ส่งออกสำเร็จ!','success');
+}
+
+function shareReport() {
+    if (!currentInspection) return;
+    if (currentUser && API_BASE) {
+        openShareModal();
+    } else {
+        let text = `📋 รายงานตรวจเช็คบ้าน\n📅 ${currentInspection.date}\n🏠 ${currentInspection.address}\n👤 ${currentInspection.ownerName}\n\n`;
+        CHECKLIST.forEach(sec => sec.items.forEach(it => {
+            const d = currentInspection.data[it.id];
+            if (d?.status==='fail') text += `❌ ${it.text}\n`;
+        }));
+        if (navigator.share) navigator.share({title:'รายงานตรวจเช็คบ้าน',text});
+        else navigator.clipboard.writeText(text).then(()=>showToast('คัดลอกแล้ว!','success'));
+    }
+}
+
+function clearAllData() {
+    if (!confirm('ลบข้อมูลทั้งหมด?')) return;
+    localStorage.clear(); inspections=[]; inspectionData={}; housePhotos=[];
+    location.reload();
+}
+
+// ===== NOTIFICATIONS =====
+let notifications = [];
+let unreadCount = 0;
+
+function toggleNotificationPanel() {
+    const panel = document.getElementById('notifPanel');
+    if (panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
+        loadNotifications();
+    } else {
+        closeNotificationPanel();
+    }
+}
+
+function closeNotificationPanel() {
+    document.getElementById('notifPanel').classList.add('hidden');
+}
+
+async function loadNotifications() {
+    if (!API_BASE || !authToken) {
+        renderNotifications();
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/notifications`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        if (data.notifications) {
+            notifications = data.notifications;
+            unreadCount = data.unread;
+            updateNotifBadge();
+            renderNotifications();
+        }
+    } catch(e) {
+        renderNotifications();
+    }
+}
+
+async function checkUnreadCount() {
+    if (!API_BASE || !authToken) return;
+
+    try {
+        const res = await fetch(`${API_BASE}/notifications/unread-count`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        if (data.unread !== undefined) {
+            unreadCount = data.unread;
+            updateNotifBadge();
+        }
+    } catch(e) {}
+}
+
+function updateNotifBadge() {
+    const badge = document.getElementById('notifBadge');
+    if (unreadCount > 0) {
+        badge.textContent = unreadCount > 9 ? '9+' : unreadCount;
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+}
+
+function renderNotifications() {
+    const list = document.getElementById('notifList');
+    if (!notifications.length) {
+        list.innerHTML = '<div class="text-center py-10 text-gray-400 text-sm"><i class="fas fa-bell-slash text-3xl mb-2 block text-gray-200"></i>ยังไม่มีการแจ้งเตือน</div>';
+        return;
+    }
+
+    const typeIcons = {
+        'new_inspection': '📋',
+        'shared_report': '🔗',
+        'info': 'ℹ️',
+        'warning': '⚠️',
+        'success': '✅'
+    };
+    const typeColors = {
+        'new_inspection': 'bg-blue-50 border-blue-200',
+        'shared_report': 'bg-violet-50 border-violet-200',
+        'info': 'bg-gray-50 border-gray-200',
+        'warning': 'bg-amber-50 border-amber-200',
+        'success': 'bg-emerald-50 border-emerald-200'
+    };
+
+    list.innerHTML = notifications.map(n => {
+        const icon = typeIcons[n.type] || 'ℹ️';
+        const colorClass = n.read ? 'bg-white' : (typeColors[n.type] || 'bg-gray-50');
+        const timeAgo = getTimeAgo(n.createdAt);
+        return `
+            <div class="px-5 py-3 ${colorClass} ${n.read ? '' : 'border-l-4 border-amber-400'} cursor-pointer hover:bg-gray-50 transition" onclick="readNotification('${n.id}')">
+                <div class="flex items-start gap-3">
+                    <span class="text-xl flex-shrink-0 mt-0.5">${icon}</span>
+                    <div class="flex-1 min-w-0">
+                        <h4 class="text-sm font-semibold ${n.read ? 'text-gray-600' : 'text-gray-800'}">${n.title}</h4>
+                        <p class="text-xs text-gray-500 mt-0.5 line-clamp-2">${n.message}</p>
+                        <p class="text-[10px] text-gray-400 mt-1">${timeAgo}</p>
+                    </div>
+                    ${!n.read ? '<div class="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0 mt-2"></div>' : ''}
+                </div>
+            </div>`;
+    }).join('');
+}
+
+function getTimeAgo(dateStr) {
+    if (!dateStr) return '';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'เมื่อสักครู่';
+    if (mins < 60) return `${mins} นาทีที่แล้ว`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} ชม. ที่แล้ว`;
+    const days = Math.floor(hours / 24);
+    return `${days} วันที่แล้ว`;
+}
+
+async function readNotification(notifId) {
+    // Mark as read locally
+    notifications = notifications.map(n => {
+        if (n.id === notifId) n.read = true;
+        return n;
+    });
+    unreadCount = Math.max(0, unreadCount - 1);
+    updateNotifBadge();
+    renderNotifications();
+
+    // Mark on server
+    if (API_BASE && authToken) {
+        try {
+            await fetch(`${API_BASE}/notifications/${notifId}/read`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+        } catch(e) {}
+    }
+}
+
+async function markAllRead() {
+    notifications = notifications.map(n => ({ ...n, read: true }));
+    unreadCount = 0;
+    updateNotifBadge();
+    renderNotifications();
+
+    if (API_BASE && authToken) {
+        try {
+            await fetch(`${API_BASE}/notifications/read-all`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+        } catch(e) {}
+    }
+    showToast('อ่านทั้งหมดแล้ว ✓','success');
+}
+
+// Poll for new notifications every 30 seconds
+setInterval(() => {
+    if (currentUser && authToken && API_BASE) {
+        checkUnreadCount();
+    }
+}, 30000);
+
+// ===== AUTH STATE =====
+let currentUser = null;
+let authToken = localStorage.getItem('authToken') || '';
+let allUsers = [];
+
+// ===== AUTH FUNCTIONS =====
+function checkAuth() {
+    if (authToken && API_BASE) {
+        fetch(`${API_BASE}/auth/me`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        }).then(r => r.json()).then(d => {
+            if (d.user) {
+                currentUser = d.user;
+                updateUserUI();
+                loadUsers();
+                loadSharedReports();
+                loadCustomItemsFromServer();
+                checkUnreadCount();
+                // Process any pending sync queue items
+                if (syncQueue.length > 0) {
+                    setTimeout(() => processSyncQueue(), 2000);
+                }
+            } else {
+                authToken = '';
+                localStorage.removeItem('authToken');
+            }
+        }).catch(() => {});
+    }
+}
+
+function showAuthModal() {
+    document.getElementById('authModal').classList.remove('hidden');
+    showLogin();
+}
+
+function closeAuthModal() {
+    document.getElementById('authModal').classList.add('hidden');
+}
+
+function showLogin() {
+    document.getElementById('loginForm').classList.remove('hidden');
+    document.getElementById('registerForm').classList.add('hidden');
+}
+
+function showRegister() {
+    document.getElementById('loginForm').classList.add('hidden');
+    document.getElementById('registerForm').classList.remove('hidden');
+}
+
+async function doLogin() {
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    if (!username || !password) return showToast('กรุณากรอกข้อมูลให้ครบ','error');
+    if (!API_BASE) return showToast('กรุณาตั้งค่า API URL ก่อน','error');
+
+    try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (data.token) {
+            authToken = data.token;
+            currentUser = data.user;
+            localStorage.setItem('authToken', authToken);
+            updateUserUI();
+            closeAuthModal();
+            showToast(`สวัสดี ${data.user.displayName}! 👋`,'success');
+            loadUsers();
+            loadSharedReports();
+            loadCustomItemsFromServer();
+            checkUnreadCount();
+            // Process pending sync queue
+            if (syncQueue.length > 0) {
+                setTimeout(() => processSyncQueue(), 1000);
+            }
+        } else {
+            showToast(data.error || 'เข้าสู่ระบบไม่สำเร็จ','error');
+        }
+    } catch(e) {
+        showToast('เชื่อมต่อ API ไม่ได้','error');
+    }
+}
+
+async function doRegister() {
+    const username = document.getElementById('regUsername').value.trim();
+    const displayName = document.getElementById('regDisplayName').value.trim();
+    const password = document.getElementById('regPassword').value;
+    const role = document.getElementById('regRole').value;
+    if (!username || !password) return showToast('กรุณากรอกข้อมูลให้ครบ','error');
+    if (!API_BASE) return showToast('กรุณาตั้งค่า API URL ก่อน','error');
+
+    try {
+        const res = await fetch(`${API_BASE}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, displayName, password, role })
+        });
+        const data = await res.json();
+        if (data.token) {
+            authToken = data.token;
+            currentUser = data.user;
+            localStorage.setItem('authToken', authToken);
+            updateUserUI();
+            closeAuthModal();
+            showToast(`สมัครสำเร็จ! สวัสดี ${data.user.displayName}! 🎉`,'success');
+            loadUsers();
+        } else {
+            showToast(data.error || 'สมัครไม่สำเร็จ','error');
+        }
+    } catch(e) {
+        showToast('เชื่อมต่อ API ไม่ได้','error');
+    }
+}
+
+function doLogout() {
+    authToken = '';
+    currentUser = null;
+    localStorage.removeItem('authToken');
+    updateUserUI();
+    closeUserMenu();
+    showToast('ออกจากระบบแล้ว','');
+}
+
+function updateUserUI() {
+    const btn = document.getElementById('userAvatarBtn');
+    if (currentUser) {
+        const initial = (currentUser.displayName || currentUser.username || 'U').charAt(0).toUpperCase();
+        const roleColors = { admin:'from-rose-500 to-rose-600', inspector:'from-brand-500 to-brand-600', viewer:'from-gray-500 to-gray-600' };
+        btn.className = `w-9 h-9 rounded-xl bg-gradient-to-br ${roleColors[currentUser.role] || roleColors.viewer} text-white flex items-center justify-center text-sm font-bold shadow-md transition`;
+        btn.innerHTML = initial;
+    } else {
+        btn.className = 'w-9 h-9 rounded-xl bg-gradient-to-br from-gray-400 to-gray-500 text-white flex items-center justify-center text-sm shadow-md transition';
+        btn.innerHTML = '<i class="fas fa-user"></i>';
+    }
+}
+
+// ===== USER MENU =====
+function openUserMenu() {
+    const modal = document.getElementById('userMenuModal');
+    const content = document.getElementById('userMenuContent');
+    modal.classList.remove('hidden');
+
+    if (currentUser) {
+        const roleLabels = { admin:'\Admin', inspector:'Inspector', viewer:'Viewer' };
+        const roleBadge = { admin:'bg-rose-100 text-rose-600', inspector:'bg-brand-100 text-brand-600', viewer:'bg-gray-100 text-gray-600' };
+        content.innerHTML = `
+            <div class="text-center mb-4">
+                <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-brand-500 to-violet-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg mb-2">
+                    ${(currentUser.displayName||'U').charAt(0)}
+                </div>
+                <h3 class="font-bold text-gray-800">${currentUser.displayName}</h3>
+                <p class="text-sm text-gray-400">@${currentUser.username}</p>
+                <span class="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${roleBadge[currentUser.role]||''}">${roleLabels[currentUser.role]||currentUser.role}</span>
+            </div>
+            <div class="space-y-2">
+                ${currentUser.role==='admin' ? `<button onclick="closeUserMenu();switchPage('users')" class="w-full py-2.5 rounded-xl bg-emerald-50 text-emerald-700 font-semibold text-sm flex items-center justify-center gap-2"><i class="fas fa-users-gear"></i> จัดการผู้ใช้</button>` : ''}
+                <button onclick="doLogout()" class="w-full py-2.5 rounded-xl bg-rose-50 text-rose-700 font-semibold text-sm flex items-center justify-center gap-2"><i class="fas fa-right-from-bracket"></i> ออกจากระบบ</button>
+                <button onclick="closeUserMenu()" class="w-full py-2 text-gray-400 text-sm">ปิด</button>
+            </div>`;
+    } else {
+        content.innerHTML = `
+            <div class="text-center mb-4">
+                <div class="w-16 h-16 mx-auto rounded-2xl bg-gray-200 flex items-center justify-center text-gray-400 text-2xl mb-2">
+                    <i class="fas fa-user"></i>
+                </div>
+                <h3 class="font-bold text-gray-500">ยังไม่ได้เข้าสู่ระบบ</h3>
+                <p class="text-sm text-gray-400">ใช้งานออฟไลน์ได้</p>
+            </div>
+            <div class="space-y-2">
+                <button onclick="closeUserMenu();showAuthModal()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white font-bold text-sm"><i class="fas fa-right-to-bracket mr-1"></i> เข้าสู่ระบบ / สมัครสมาชิก</button>
+                <button onclick="closeUserMenu()" class="w-full py-2 text-gray-400 text-sm">ปิด</button>
+            </div>`;
+    }
+}
+
+function closeUserMenu() {
+    document.getElementById('userMenuModal').classList.add('hidden');
+}
+
+// ===== USERS MANAGEMENT =====
+async function loadUsers() {
+    if (!API_BASE || !authToken || !currentUser || currentUser.role !== 'admin') return;
+    try {
+        const res = await fetch(`${API_BASE}/users`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        if (data.users) {
+            allUsers = data.users;
+            renderUsers();
+        }
+    } catch(e) {}
+}
+
+function renderUsers() {
+    const c = document.getElementById('usersList');
+    if (!allUsers.length) {
+        c.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">ยังไม่มีผู้ใช้</p>';
+        return;
+    }
+    const roleBadge = { admin:'bg-rose-100 text-rose-600', inspector:'bg-brand-100 text-brand-600', viewer:'bg-gray-100 text-gray-600' };
+    const roleLabels = { admin:'Admin', inspector:'Inspector', viewer:'Viewer' };
+    c.innerHTML = allUsers.map(u => `
+        <div class="px-5 py-3 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-400 to-violet-500 flex items-center justify-center text-white font-bold text-sm">
+                ${(u.displayName||'U').charAt(0)}
+            </div>
+            <div class="flex-1 min-w-0">
+                <h4 class="text-sm font-bold text-gray-800 truncate">${u.displayName}</h4>
+                <p class="text-[11px] text-gray-400">@${u.username}</p>
+            </div>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${roleBadge[u.role]||''}">${roleLabels[u.role]||u.role}</span>
+            ${u.id !== currentUser?.id ? `<button onclick="toggleUserRole('${u.id}','${u.role}')" class="text-gray-300 hover:text-brand-500 transition"><i class="fas fa-pen text-xs"></i></button>` : ''}
+        </div>
+    `).join('');
+}
+
+async function toggleUserRole(userId, currentRole) {
+    const newRole = currentRole === 'admin' ? 'inspector' : currentRole === 'inspector' ? 'viewer' : 'admin';
+    if (!confirm(`เปลี่ยนบทบาทเป็น ${newRole}?`)) return;
+    try {
+        await fetch(`${API_BASE}/users/${userId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+            body: JSON.stringify({ role: newRole })
+        });
+        showToast('อัปเดตสำเร็จ!','success');
+        loadUsers();
+    } catch(e) { showToast('เกิดข้อผิดพลาด','error'); }
+}
+
+function showAddUserForm() {
+    showAuthModal();
+    showRegister();
+}
+
+// ===== SHARE =====
+async function shareReportAPI(inspectionId, shareWith, permission) {
+    if (!API_BASE || !authToken) return;
+    try {
+        await fetch(`${API_BASE}/share`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+            body: JSON.stringify({ inspectionId, shareWith, permission })
+        });
+        showToast('แชร์สำเร็จ!','success');
+    } catch(e) { showToast('แชร์ไม่สำเร็จ','error'); }
+}
+
+function openShareModal() {
+    const modal = document.getElementById('shareModal');
+    const list = document.getElementById('shareUserList');
+    modal.classList.remove('hidden');
+    if (allUsers.length) {
+        list.innerHTML = allUsers.map(u => `
+            <button onclick="shareToUser('${u.id}')" class="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition">
+                <div class="w-8 h-8 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center text-sm font-bold">${(u.displayName||'U').charAt(0)}</div>
+                <div class="text-left flex-1"><h4 class="text-sm font-bold text-gray-700">${u.displayName}</h4><p class="text-[10px] text-gray-400">@${u.username}</p></div>
+                <i class="fas fa-share text-violet-300"></i>
+            </button>
+        `).join('');
+    } else {
+        list.innerHTML = '<p class="text-sm text-gray-400 text-center py-2">ยังไม่มีผู้ใช้อื่น</p>';
+    }
+}
+
+function closeShareModal() {
+    document.getElementById('shareModal').classList.add('hidden');
+}
+
+function shareToUser(userId) {
+    if (currentInspection) {
+        shareReportAPI(currentInspection.id, userId, 'view');
+        closeShareModal();
+    }
+}
+
+function shareToAll() {
+    if (currentInspection) {
+        shareReportAPI(currentInspection.id, 'all', 'view');
+        closeShareModal();
+    }
+}
+
+async function loadSharedReports() {
+    if (!API_BASE || !authToken) return;
+    try {
+        const res = await fetch(`${API_BASE}/share/shared-with-me`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        const c = document.getElementById('sharedList');
+        if (data.shared?.length) {
+            c.innerHTML = data.shared.map(s => `<div class="py-2 text-sm text-gray-600"><i class="fas fa-share text-violet-400 mr-2"></i>Report ${s.inspectionId} (by ${s.sharedBy})</div>`).join('');
+        }
+    } catch(e) {}
+}
+
+// ===== OFFLINE / SYNC QUEUE =====
+let isOnline = navigator.onLine;
+let syncQueue = JSON.parse(localStorage.getItem('syncQueue') || '[]');
+
+// Network status detection
+window.addEventListener('online', () => {
+    isOnline = true;
+    showToast('🌐 กลับมาออนไลน์แล้ว - กำลังซิงค์...','success');
+    processSyncQueue();
+    syncCustomItemsToServer();
+});
+
+window.addEventListener('offline', () => {
+    isOnline = false;
+    showToast('📡 ไม่มีสัญญาณ - บันทึกลงเครื่องอัตโนมัติ','');
+});
+
+// Add action to sync queue (for offline use)
+function addToSyncQueue(action, payload) {
+    const queueItem = {
+        id: 'q_' + Date.now(),
+        action: action,
+        payload: payload,
+        createdAt: new Date().toISOString()
+    };
+    syncQueue.push(queueItem);
+    localStorage.setItem('syncQueue', JSON.stringify(syncQueue));
+    return queueItem;
+}
+
+// Process sync queue when online
+async function processSyncQueue() {
+    if (!isOnline || !API_BASE || !authToken || syncQueue.length === 0) return;
+
+    showToast(`📡 กำลังซิงค์ ${syncQueue.length} รายการ...`,'');
+    let processed = 0;
+    let errors = 0;
+
+    for (const item of [...syncQueue]) {
+        try {
+            if (item.action === 'create_inspection') {
+                const res = await fetch(`${API_BASE}/inspections`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(item.payload)
+                });
+                if (res.ok) processed++;
+                else errors++;
+            } else if (item.action === 'save_custom_items') {
+                const res = await fetch(`${API_BASE}/custom-items`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(item.payload)
+                });
+                if (res.ok) processed++;
+                else errors++;
+            } else if (item.action === 'share_report') {
+                const res = await fetch(`${API_BASE}/share`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(item.payload)
+                });
+                if (res.ok) processed++;
+                else errors++;
+            }
+            // Remove processed item
+            syncQueue = syncQueue.filter(q => q.id !== item.id);
+        } catch (e) {
+            errors++;
+            break; // Stop if network fails again
+        }
+    }
+
+    localStorage.setItem('syncQueue', JSON.stringify(syncQueue));
+
+    if (processed > 0) {
+        showToast(`✅ ซิงค์สำเร็จ ${processed} รายการ${errors > 0 ? `, ผิดพลาด ${errors}` : ''}`,'success');
+    }
+}
+
+// ===== CUSTOM ITEMS =====
+let customItems = JSON.parse(localStorage.getItem('customChecklistItems') || '{}');
+
+function getSectionItems(sectionId) {
+    const section = CHECKLIST.find(s => s.id === sectionId);
+    if (!section) return [];
+    const defaultItems = section.items.map(it => ({ ...it, isCustom: false }));
+    const custom = (customItems[sectionId] || []).map(it => ({ ...it, isCustom: true }));
+    return [...defaultItems, ...custom];
+}
+
+function openAddItemModal(sectionId) {
+    document.getElementById('addItemSectionId').value = sectionId;
+    document.getElementById('addItemEditId').value = '';
+    document.getElementById('addItemText').value = '';
+    document.getElementById('addItemModalTitle').textContent = 'เพิ่มรายการตรวจสอบ';
+    document.getElementById('addItemModal').classList.remove('hidden');
+    document.getElementById('addItemText').focus();
+}
+
+function openEditItemModal(sectionId, itemId) {
+    const items = customItems[sectionId] || [];
+    const item = items.find(i => i.id === itemId);
+    if (!item) return;
+    document.getElementById('addItemSectionId').value = sectionId;
+    document.getElementById('addItemEditId').value = itemId;
+    document.getElementById('addItemText').value = item.text;
+    document.getElementById('addItemModalTitle').textContent = 'แก้ไขรายการ';
+    document.getElementById('addItemModal').classList.remove('hidden');
+    document.getElementById('addItemText').focus();
+}
+
+function closeAddItemModal() {
+    document.getElementById('addItemModal').classList.add('hidden');
+}
+
+function saveCustomItem() {
+    const sectionId = document.getElementById('addItemSectionId').value;
+    const editId = document.getElementById('addItemEditId').value;
+    const text = document.getElementById('addItemText').value.trim();
+    if (!text) return showToast('กรุณากรอกชื่อรายการ','error');
+
+    if (!customItems[sectionId]) customItems[sectionId] = [];
+
+    if (editId) {
+        const idx = customItems[sectionId].findIndex(i => i.id === editId);
+        if (idx >= 0) customItems[sectionId][idx].text = text;
+        showToast('แก้ไขรายการสำเร็จ!','success');
+    } else {
+        const newItem = { id: 'custom_' + Date.now(), text: text };
+        customItems[sectionId].push(newItem);
+        inspectionData[newItem.id] = { status: null, issues: [] };
+        showToast('เพิ่มรายการสำเร็จ! ✓','success');
+    }
+
+    localStorage.setItem('customChecklistItems', JSON.stringify(customItems));
+    closeAddItemModal();
+    renderChecklist();
+
+    // Sync to Google Sheets
+    syncCustomItemsToServer();
+}
+
+function deleteCustomItem(sectionId, itemId) {
+    if (!confirm('ลบรายการนี้?')) return;
+    if (customItems[sectionId]) {
+        customItems[sectionId] = customItems[sectionId].filter(i => i.id !== itemId);
+        localStorage.setItem('customChecklistItems', JSON.stringify(customItems));
+        delete inspectionData[itemId];
+        saveLocal();
+        renderChecklist();
+        showToast('ลบรายการสำเร็จ','');
+        // Sync to Google Sheets
+        syncCustomItemsToServer();
+    }
+}
+
+// ===== SYNC CUSTOM ITEMS TO SERVER =====
+async function syncCustomItemsToServer() {
+    if (!isOnline || !API_BASE || !authToken) {
+        // Offline - add to queue
+        addToSyncQueue('save_custom_items', { items: customItems });
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/custom-items`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ items: customItems })
+        });
+        if (!res.ok) throw new Error('Sync failed');
+    } catch (e) {
+        // If sync fails, add to queue
+        addToSyncQueue('save_custom_items', { items: customItems });
+    }
+}
+
+// Load custom items from server
+async function loadCustomItemsFromServer() {
+    if (!isOnline || !API_BASE || !authToken) return;
+
+    try {
+        const res = await fetch(`${API_BASE}/custom-items`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        if (data.customItems) {
+            // Merge with local custom items
+            for (const [sectionId, items] of Object.entries(data.customItems)) {
+                if (!customItems[sectionId]) customItems[sectionId] = [];
+                for (const item of items) {
+                    if (!customItems[sectionId].find(i => i.id === item.id)) {
+                        customItems[sectionId].push(item);
+                    }
+                }
+            }
+            localStorage.setItem('customChecklistItems', JSON.stringify(customItems));
+            renderChecklist();
+        }
+    } catch (e) {}
+}
+
+// ===== RE-INSPECTION =====
+let reinspectData = {};
+let originalInspection = null;
+
+function startReinspection() {
+    if (!currentInspection) return;
+    originalInspection = currentInspection;
+    reinspectData = {};
+
+    const issues = [];
+    CHECKLIST.forEach(sec => {
+        sec.items.forEach(it => {
+            const d = originalInspection.data[it.id];
+            if (d && d.status === 'fail') {
+                issues.push({
+                    sectionId: sec.id,
+                    sectionTitle: sec.title,
+                    itemId: it.id,
+                    itemText: it.text,
+                    originalIssues: d.issues || []
+                });
+                reinspectData[it.id] = { fixed: null, photos: [], note: '' };
+            }
+        });
+    });
+
+    if (issues.length === 0) {
+        showToast('ไม่มีรายการปัญหาให้ตรวจรอบ 2','error');
+        return;
+    }
+
+    // Render re-inspection page
+    const info = document.getElementById('reinspectInfo');
+    info.innerHTML = `
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <h3 class="text-sm font-bold text-amber-800 mb-2">📋 ตรวจรอบ 2</h3>
+            <div class="text-sm text-amber-700 space-y-1">
+                <p>เจ้าของ: <b>${originalInspection.ownerName}</b></p>
+                <p>ที่อยู่: <b>${originalInspection.address}</b></p>
+                <p>ตรวจครั้งแรก: <b>${originalInspection.date}</b></p>
+                <p class="font-bold">รายการที่ต้องแก้ไข: <span class="text-rose-600">${issues.length} รายการ</span></p>
+            </div>
+        </div>
+    `;
+
+    const container = document.getElementById('reinspectItems');
+    container.innerHTML = issues.map((issue, idx) => `
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="px-5 py-3 bg-gradient-to-r from-amber-50 to-orange-50 flex items-center justify-between">
+                <div>
+                    <span class="text-[10px] font-semibold text-amber-500 uppercase">${issue.sectionTitle}</span>
+                    <h4 class="text-sm font-bold text-gray-800">${idx+1}. ${issue.itemText}</h4>
+                </div>
+                <span class="text-[10px] font-bold bg-rose-100 text-rose-600 px-2 py-0.5 rounded-full">ปัญหาเดิม</span>
+            </div>
+            <div class="p-4">
+                ${issue.originalIssues.length ? `<div class="mb-3"><p class="text-[11px] text-gray-400 mb-1">ปัญหาที่เคยพบ:</p>${issue.originalIssues.map(is => `<p class="text-xs text-rose-600 bg-rose-50 rounded-lg px-3 py-1.5 mb-1"><i class="fas fa-circle-exclamation mr-1"></i>${is.note || 'ไม่มีรายละเอียด'}</p>`).join('')}</div>` : ''}
+                <div class="flex gap-2 mb-3">
+                    <button onclick="setReinspectStatus('${issue.itemId}','fixed')" class="flex-1 py-2.5 rounded-xl border-2 font-bold text-sm transition" id="rebtn-${issue.itemId}-fixed">
+                        <i class="fas fa-check-circle mr-1"></i> แก้ไขแล้ว
+                    </button>
+                    <button onclick="setReinspectStatus('${issue.itemId}','not_fixed')" class="flex-1 py-2.5 rounded-xl border-2 font-bold text-sm transition" id="rebtn-${issue.itemId}-not_fixed">
+                        <i class="fas fa-times-circle mr-1"></i> ยังไม่แก้
+                    </button>
+                </div>
+                <div id="reDetail-${issue.itemId}" class="hidden">
+                    <textarea class="w-full px-3 py-2 rounded-xl border-2 border-gray-100 focus:border-amber-400 outline-none text-sm resize-none mb-2" rows="2" placeholder="บันทึกเพิ่มเติม..." oninput="reinspectData['${issue.itemId}'].note=this.value"></textarea>
+                    <div id="rePhotos-${issue.itemId}" class="photo-grid mb-2"></div>
+                    <label class="flex items-center justify-center gap-1 w-full py-2 border-2 border-dashed border-amber-200 rounded-xl bg-amber-50/50 text-amber-500 text-xs font-semibold cursor-pointer hover:bg-amber-50 transition">
+                        <i class="fas fa-camera"></i> ถ่ายรูปหลักฐาน
+                        <input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="handleReinspectPhoto('${issue.itemId}',this)">
+                    </label>
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    switchPage('reinspect');
+}
+
+function setReinspectStatus(itemId, status) {
+    reinspectData[itemId].fixed = status;
+    const fixedBtn = document.getElementById(`rebtn-${itemId}-fixed`);
+    const notFixedBtn = document.getElementById(`rebtn-${itemId}-not_fixed`);
+    fixedBtn.className = 'flex-1 py-2.5 rounded-xl border-2 font-bold text-sm transition ' + (status==='fixed' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-emerald-200 text-emerald-600 bg-white');
+    notFixedBtn.className = 'flex-1 py-2.5 rounded-xl border-2 font-bold text-sm transition ' + (status==='not_fixed' ? 'bg-rose-500 border-rose-500 text-white' : 'border-rose-200 text-rose-600 bg-white');
+    document.getElementById(`reDetail-${itemId}`).classList.remove('hidden');
+}
+
+function handleReinspectPhoto(itemId, input) {
+    Array.from(input.files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            reinspectData[itemId].photos.push(e.target.result);
+            renderReinspectPhotos(itemId);
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function renderReinspectPhotos(itemId) {
+    const grid = document.getElementById(`rePhotos-${itemId}`);
+    grid.innerHTML = reinspectData[itemId].photos.map((src, i) => `
+        <div class="relative">
+            <img src="${src}" class="w-full aspect-square object-cover rounded-lg border border-white shadow-sm">
+            <button onclick="removeReinspectPhoto('${itemId}',${i})" class="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white rounded-full text-[8px] flex items-center justify-center"><i class="fas fa-xmark"></i></button>
+        </div>
+    `).join('');
+}
+
+function removeReinspectPhoto(itemId, idx) {
+    reinspectData[itemId].photos.splice(idx, 1);
+    renderReinspectPhotos(itemId);
+}
+
+function submitReinspection() {
+    const unchecked = Object.values(reinspectData).filter(d => d.fixed === null).length;
+    if (unchecked > 0) return showToast(`กรุณาตรวจ ${unchecked} รายการที่เหลือ`,'error');
+
+    const report = {
+        id: Date.now(),
+        type: 'reinspection',
+        linkedTo: originalInspection.id,
+        date: new Date().toISOString().split('T')[0],
+        ownerName: originalInspection.ownerName,
+        address: originalInspection.address,
+        houseType: originalInspection.houseType,
+        inspectorName: document.getElementById('inspectorName').value || currentUser?.displayName || '',
+        data: JSON.parse(JSON.stringify(reinspectData)),
+        originalData: JSON.parse(JSON.stringify(originalInspection.data)),
+        timestamp: new Date().toISOString()
+    };
+
+    inspections.unshift(report);
+    localStorage.setItem('inspections', JSON.stringify(inspections));
+    syncToAPI(report);
+    generateComparisonReport(originalInspection, report);
+    showToast('บันทึกรายงานตรวจรอบ 2 สำเร็จ! ✓','success');
+    setTimeout(() => switchPage('compare'), 400);
+}
+
+function generateComparisonReport(original, reinspection) {
+    const container = document.getElementById('compareContent');
+    const reData = reinspection.data;
+
+    let fixed = 0, notFixed = 0, total = 0;
+    CHECKLIST.forEach(sec => sec.items.forEach(it => {
+        if (original.data[it.id]?.status === 'fail') {
+            total++;
+            if (reData[it.id]?.fixed === 'fixed') fixed++;
+            else if (reData[it.id]?.fixed === 'not_fixed') notFixed++;
+        }
+    }));
+
+    let html = `
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4 anim-slide-up">
+        <div class="px-5 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
+            <h2 class="font-bold flex items-center gap-2"><i class="fas fa-scale-balanced"></i> รายงานเปรียบเทียบ รอบ 1 vs รอบ 2</h2>
+        </div>
+        <div class="p-5">
+            <div class="grid grid-cols-2 gap-3 text-sm mb-4">
+                <div><span class="text-gray-400 text-xs">เจ้าของ:</span><br><b>${original.ownerName}</b></div>
+                <div><span class="text-gray-400 text-xs">ที่อยู่:</span><br><b class="text-xs">${original.address}</b></div>
+                <div><span class="text-gray-400 text-xs">ตรวจรอบ 1:</span><br><b>${original.date}</b></div>
+                <div><span class="text-gray-400 text-xs">ตรวจรอบ 2:</span><br><b>${reinspection.date}</b></div>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+                <div class="bg-emerald-50 rounded-xl p-3 text-center border border-emerald-200">
+                    <div class="text-2xl font-extrabold text-emerald-600">${fixed}</div>
+                    <div class="text-[10px] font-semibold text-emerald-500">แก้ไขแล้ว ✓</div>
+                </div>
+                <div class="bg-rose-50 rounded-xl p-3 text-center border border-rose-200">
+                    <div class="text-2xl font-extrabold text-rose-600">${notFixed}</div>
+                    <div class="text-[10px] font-semibold text-rose-500">ยังไม่แก้ ✗</div>
+                </div>
+                <div class="bg-amber-50 rounded-xl p-3 text-center border border-amber-200">
+                    <div class="text-2xl font-extrabold text-amber-600">${total > 0 ? Math.round(fixed/total*100) : 0}%</div>
+                    <div class="text-[10px] font-semibold text-amber-500">อัตราแก้ไข</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4 anim-slide-up">
+        <div class="px-5 py-4 bg-gradient-to-r from-gray-700 to-gray-800 text-white">
+            <h2 class="font-bold flex items-center gap-2"><i class="fas fa-list-check"></i> รายละเอียดเปรียบเทียบ</h2>
+        </div>
+        <div class="p-5 space-y-3">`;
+
+    let itemIdx = 0;
+    CHECKLIST.forEach(sec => {
+        sec.items.forEach(it => {
+            if (original.data[it.id]?.status !== 'fail') return;
+            itemIdx++;
+            const re = reData[it.id] || {};
+            const isFixed = re.fixed === 'fixed';
+            const origIssues = original.data[it.id]?.issues || [];
+
+            html += `
+            <div class="border border-gray-100 rounded-xl overflow-hidden">
+                <div class="flex items-center gap-3 px-4 py-3 ${isFixed ? 'bg-emerald-50' : 'bg-rose-50'}">
+                    <div class="w-8 h-8 rounded-lg flex items-center justify-center ${isFixed ? 'bg-emerald-500' : 'bg-rose-500'}">
+                        <i class="fas ${isFixed ? 'fa-check' : 'fa-xmark'} text-white text-xs"></i>
+                    </div>
+                    <div class="flex-1">
+                        <span class="text-[10px] font-semibold text-gray-400">${sec.title}</span>
+                        <h4 class="text-sm font-bold text-gray-800">${itemIdx}. ${it.text}</h4>
+                    </div>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${isFixed ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}">${isFixed ? 'แก้ไขแล้ว' : 'ยังไม่แก้'}</span>
+                </div>
+                <div class="px-4 py-3 space-y-2">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-rose-50 rounded-lg p-3">
+                            <p class="text-[10px] font-bold text-rose-400 mb-1">🔍 รอบ 1 - ปัญหา</p>
+                            ${origIssues.map(is => `<p class="text-xs text-rose-700">• ${is.note || 'ไม่มีรายละเอียด'}</p>`).join('')}
+                            ${origIssues.some(is => is.photos?.length) ? `<div class="photo-grid mt-2">${origIssues.flatMap(is => is.photos || []).map(src => `<img src="${src}" class="w-full aspect-square object-cover rounded-lg border">`).join('')}</div>` : ''}
+                        </div>
+                        <div class="bg-emerald-50 rounded-lg p-3">
+                            <p class="text-[10px] font-bold text-emerald-400 mb-1">✅ รอบ 2 - ผลลัพธ์</p>
+                            ${re.note ? `<p class="text-xs text-emerald-700">${re.note}</p>` : ''}
+                            ${re.photos?.length ? `<div class="photo-grid mt-2">${re.photos.map(src => `<img src="${src}" class="w-full aspect-square object-cover rounded-lg border">`).join('')}</div>` : '<p class="text-xs text-gray-400 mt-1">ไม่มีรูป</p>'}
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        });
+    });
+
+    html += `</div></div>`;
+
+    // Action buttons
+    html += `<div class="flex gap-3">
+        <button onclick="generateComparisonPDF()" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-sm shadow-lg active:scale-[0.98] transition flex items-center justify-center gap-2">
+            <i class="fas fa-file-pdf"></i> Export PDF เปรียบเทียบ
+        </button>
+        <button onclick="switchPage('report')" class="py-3 px-5 rounded-xl bg-gray-100 text-gray-600 font-semibold text-sm active:scale-[0.98] transition">
+            กลับ
+        </button>
+    </div>`;
+
+    container.innerHTML = html;
+}
+
+function generateComparisonPDF() {
+    if (!originalInspection) return showToast('ไม่มีข้อมูลเปรียบเทียบ','error');
+    showToast('กำลังสร้าง PDF...','');
+
+    const r = inspections.find(x => x.type === 'reinspection' && x.linkedTo === originalInspection.id);
+    if (!r) return;
+
+    let fixed = 0, notFixed = 0, total = 0;
+    CHECKLIST.forEach(sec => sec.items.forEach(it => {
+        if (originalInspection.data[it.id]?.status === 'fail') {
+            total++;
+            if (r.data[it.id]?.fixed === 'fixed') fixed++;
+            else notFixed++;
+        }
+    }));
+
+    const el = document.getElementById('pdfContent');
+    el.style.position = 'absolute'; el.style.left = '0'; el.style.top = '0'; el.style.width = '210mm';
+
+    let rows = '';
+    let idx = 0;
+    CHECKLIST.forEach(sec => sec.items.forEach(it => {
+        if (originalInspection.data[it.id]?.status !== 'fail') return;
+        idx++;
+        const re = r.data[it.id] || {};
+        const isFixed = re.fixed === 'fixed';
+        const origIssues = originalInspection.data[it.id]?.issues || [];
+        const origPhotos = origIssues.flatMap(is => is.photos || []);
+
+        rows += `<tr>
+            <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;font-weight:700;">${idx}</td>
+            <td style="padding:8px;border:1px solid #e5e7eb;font-size:12px;">${sec.title}</td>
+            <td style="padding:8px;border:1px solid #e5e7eb;font-weight:500;font-size:12px;">${it.text}</td>
+            <td style="padding:8px;border:1px solid #e5e7eb;background:#fff1f2;font-size:11px;">${origIssues.map(is=>is.note||'-').join('<br>')}${origPhotos.length ? '<div style="margin-top:4px;">' + origPhotos.map(s=>'<img src="'+s+'" style="width:40px;height:40px;object-fit:cover;border-radius:4px;display:inline-block;margin:1px;">').join('') + '</div>' : ''}</td>
+            <td style="padding:8px;border:1px solid #e5e7eb;background:${isFixed?'#ecfdf5':'#fff1f2'};text-align:center;font-weight:700;color:${isFixed?'#059669':'#e11d48'};font-size:12px;">${isFixed?'✓ แก้ไขแล้ว':'✗ ยังไม่แก้'}</td>
+            <td style="padding:8px;border:1px solid #e5e7eb;background:#ecfdf5;font-size:11px;">${re.note||'-'}${re.photos?.length ? '<div style="margin-top:4px;">' + re.photos.map(s=>'<img src="'+s+'" style="width:40px;height:40px;object-fit:cover;border-radius:4px;display:inline-block;margin:1px;">').join('') + '</div>' : ''}</td>
+        </tr>`;
+    }));
+
+    el.innerHTML = `<div style="font-family:'IBM Plex Sans Thai',sans-serif;color:#1f2937;line-height:1.6;">
+    <div style="width:210mm;min-height:297mm;padding:20mm;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(135deg,#f59e0b 0%,#ea580c 100%);color:white;page-break-after:always;">
+        <div style="text-align:center;">
+            <div style="width:100px;height:100px;margin:0 auto 30px;background:rgba(255,255,255,0.15);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:48px;">🔍</div>
+            <h1 style="font-size:32px;font-weight:800;margin-bottom:8px;">รายงานเปรียบเทียบ</h1>
+            <p style="font-size:16px;opacity:0.85;margin-bottom:10px;">Comparison Report: Round 1 vs Round 2</p>
+            <p style="font-size:14px;opacity:0.7;">Uchi Kakunin Setsubi</p>
+            <div style="background:rgba(255,255,255,0.15);border-radius:16px;padding:24px 40px;display:inline-block;text-align:left;font-size:14px;line-height:2;margin-top:30px;">
+                <div><strong>เจ้าของ:</strong> ${originalInspection.ownerName}</div>
+                <div><strong>ที่อยู่:</strong> ${originalInspection.address}</div>
+                <div><strong>ตรวจรอบ 1:</strong> ${originalInspection.date}</div>
+                <div><strong>ตรวจรอบ 2:</strong> ${r.date}</div>
+            </div>
+        </div>
+    </div>
+
+    <div style="width:210mm;padding:15mm 20mm;page-break-after:always;">
+        <h2 style="font-size:20px;font-weight:700;color:#ea580c;margin-bottom:16px;border-bottom:3px solid #ea580c;padding-bottom:8px;">📊 สรุปผลการเปรียบเทียบ</h2>
+        <div style="display:flex;gap:12px;margin-bottom:20px;">
+            <div style="flex:1;text-align:center;padding:16px;background:#ecfdf5;border-radius:12px;border:2px solid #d1fae5;"><div style="font-size:36px;font-weight:800;color:#059669;">${fixed}</div><div style="font-size:12px;color:#059669;font-weight:600;">แก้ไขแล้ว ✓</div></div>
+            <div style="flex:1;text-align:center;padding:16px;background:#fff1f2;border-radius:12px;border:2px solid #fecdd3;"><div style="font-size:36px;font-weight:800;color:#e11d48;">${notFixed}</div><div style="font-size:12px;color:#e11d48;font-weight:600;">ยังไม่แก้ ✗</div></div>
+            <div style="flex:1;text-align:center;padding:16px;background:#fffbeb;border-radius:12px;border:2px solid #fde68a;"><div style="font-size:36px;font-weight:800;color:#d97706;">${total>0?Math.round(fixed/total*100):0}%</div><div style="font-size:12px;color:#d97706;font-weight:600;">อัตราแก้ไข</div></div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead><tr style="background:#f9fafb;">
+                <th style="padding:8px;border:1px solid #e5e7eb;width:4%;">#</th>
+                <th style="padding:8px;border:1px solid #e5e7eb;width:12%;">หมวด</th>
+                <th style="padding:8px;border:1px solid #e5e7eb;width:18%;">รายการ</th>
+                <th style="padding:8px;border:1px solid #e5e7eb;width:25%;background:#fff1f2;">🔍 รอบ 1 - ปัญหา</th>
+                <th style="padding:8px;border:1px solid #e5e7eb;width:12%;text-align:center;">สถานะ</th>
+                <th style="padding:8px;border:1px solid #e5e7eb;width:29%;background:#ecfdf5;">✅ รอบ 2 - ผลลัพธ์</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>
+    </div>
+
+    <div style="width:210mm;padding:20mm;min-height:297mm;display:flex;flex-direction:column;justify-content:flex-end;">
+        <p style="font-size:14px;color:#6b7280;margin-bottom:40px;">ข้าพเจ้าได้ทำการตรวจสอบการแก้ไขดังกล่าวข้างต้นด้วยความเรียบร้อย</p>
+        <div style="display:flex;justify-content:space-between;gap:40px;">
+            <div style="flex:1;text-align:center;"><div style="height:80px;border-bottom:2px dashed #d1d5db;margin-bottom:8px;"></div><p style="font-size:13px;font-weight:600;">ผู้ตรวจ (${r.inspectorName||'...........'})</p></div>
+            <div style="flex:1;text-align:center;"><div style="height:80px;border-bottom:2px dashed #d1d5db;margin-bottom:8px;"></div><p style="font-size:13px;font-weight:600;">เจ้าของบ้าน (${originalInspection.ownerName})</p></div>
+        </div>
+        <div style="text-align:center;margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;"><p style="font-size:10px;color:#d1d5db;">Uchi Kakunin Setsubi System</p></div>
+    </div>
+    </div>`;
+
+    html2pdf().set({ margin:0, filename:`comparison-${originalInspection.date}-${originalInspection.ownerName}.pdf`, image:{type:'jpeg',quality:0.85}, html2canvas:{scale:2,useCORS:true}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}, pagebreak:{mode:['css','legacy']} }).from(el).save().then(() => { showToast('สร้าง PDF สำเร็จ! ✓','success'); el.style.left='-9999px'; }).catch(() => { el.style.left='-9999px'; });
+}
+
+// ===== TOAST =====
+function showToast(msg, type='') {
+    const w = document.getElementById('toastWrap');
+    const t = document.createElement('div');
+    const icons = {success:'fa-circle-check',error:'fa-circle-exclamation', '':'fa-circle-info'};
+    const colors = {success:'bg-emerald-500',error:'bg-rose-500', '':'bg-gray-700'};
+    t.className = `${colors[type]||colors['']} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 text-sm font-medium anim-slide-up`;
+    t.innerHTML = `<i class="fas ${icons[type]||icons['']}"></i> ${msg}`;
+    w.appendChild(t);
+    setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity 0.3s'; setTimeout(()=>t.remove(),300); }, 2500);
+}
+
+// ===== INIT =====
+setTimeout(checkAuth, 500);
+</script>
+</body>
+</html>
