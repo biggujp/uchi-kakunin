@@ -520,6 +520,9 @@ document.addEventListener('DOMContentLoaded', () => {
     loadSettings();
     renderChecklist();
     renderHistory();
+    // Show submit bar on inspect page (default page)
+    const submitBar = document.getElementById('submitBar');
+    if (submitBar) submitBar.style.display = 'block';
 });
 
 // ===== NAV =====
@@ -887,6 +890,7 @@ function highlightField(el) {
 }
 
 function submitInspection() {
+    console.log('submitInspection called', { editingInspectionId, inspectionDataKeys: Object.keys(inspectionData).length });
     const errors = [];
     const ownerEl = document.getElementById('ownerName');
     const addrEl = document.getElementById('address');
@@ -914,12 +918,14 @@ function submitInspection() {
     }
 
     if (errors.length > 0) {
+        console.log('Validation errors:', errors);
         showToast('กรุณากรอกข้อมูลให้ครบ:\n' + errors.join('\n'), 'error');
         if (!owner) ownerEl.focus();
         else if (!addr) addrEl.focus();
         else if (!date) dateEl.focus();
         return;
     }
+    console.log('Validation passed, saving...');
 
     const now = new Date().toISOString();
     let report;
@@ -975,6 +981,7 @@ function submitInspection() {
         ? 'แก้ไขรายการสำเร็จ! ✓'
         : (isOnline ? 'บันทึกรายงานสำเร็จ! ✓' : 'บันทึกลงเครื่อง - จะซิงค์เมื่อมีสัญญาณ 📡');
     showToast(msg, 'success');
+    console.log('Inspection saved:', { id: report.id, owner: report.ownerName, items: Object.keys(report.data).length });
     setTimeout(() => switchPage('report'), 400);
 }
 
