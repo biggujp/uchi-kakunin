@@ -1113,28 +1113,94 @@ function generatePDF() {
 }
 
 // ===== HISTORY =====
+let selectedInspections = new Set();
+let deleteMode = false;
+
 function renderHistory() {
     const c = document.getElementById('historyContent');
     if (!inspections.length) {
         c.innerHTML = `<div class="text-center py-16"><div class="w-20 h-20 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-4"><i class="fas fa-clock-rotate-left text-3xl text-gray-300"></i></div><h3 class="font-bold text-gray-400">ยังไม่มีประวัติ</h3></div>`;
         return;
     }
-    c.innerHTML = inspections.map(r => {
-        let p=0,f=0;
-        Object.values(r.data).forEach(d=>{if(d.status==='pass')p++;else if(d.status==='fail')f++;});
-        return `<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-3 active:scale-[0.98] transition cursor-pointer" onclick="viewHistory(${r.id})">
-            <div class="flex items-center justify-between mb-1">
-                <span class="text-[11px] text-gray-400 flex items-center gap-1"><i class="fas fa-calendar"></i> ${r.date} ${r.houseType?'• '+r.houseType:''}</span>
-                ${f>0?`<span class="text-[10px] font-bold bg-rose-100 text-rose-600 px-2 py-0.5 rounded-full">${f} ปัญหา</span>`:`<span class="text-[10px] font-bold bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full">ผ่านทั้งหมด</span>`}
+    const selCount = selectedInspections.size;
+    c.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-xs text-gray-500">ทั้งหมด ${inspections.length} รายการ</span>
+            <div class="flex gap-2">
+                ${deleteMode ? `
+                    <button onclick="deleteSelected()" class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-rose-500 text-white active:scale-95 transition ${selCount===0?'opacity-50 pointer-events-none':''}">
+                        <i class="fas fa-trash mr-1"></i>ลบที่เลือก (${selCount})
+                    </button>
+                    <button onclick="deleteAllInspections()" class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white active:scale-95 transition">
+                        <i class="fas fa-trash-can mr-1"></i>ลบทั้งหมด
+                    </button>
+                    <button onclick="toggleDeleteMode()" class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-gray-200 text-gray-600 active:scale-95 transition">
+                        ยกเลิก
+                    </button>
+                ` : `
+                    <button onclick="toggleDeleteMode()" class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-rose-100 text-rose-600 active:scale-95 transition">
+                        <i class="fas fa-trash mr-1"></i>ลบรายการ
+                    </button>
+                `}
             </div>
-            <h4 class="text-sm font-bold text-gray-800">${r.address}</h4>
-            <p class="text-xs text-gray-400 mt-1">เจ้าของ: ${r.ownerName}</p>
-            <div class="flex gap-2 mt-2">
-                <span class="text-[10px] font-bold bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">✓ ${p} ผ่าน</span>
-                ${f?`<span class="text-[10px] font-bold bg-rose-50 text-rose-600 px-2 py-0.5 rounded-full">✗ ${f} ปัญหา</span>`:''}
-            </div>
-        </div>`;
-    }).join('');
+        </div>
+        ${inspections.map(r => {
+            let p=0,f=0;
+            Object.values(r.data).forEach(d=>{if(d.status==='pass')p++;else if(d.status==='fail')f++;});
+            const checked = selectedInspections.has(r.id);
+            return `<div class="bg-white rounded-2xl shadow-sm border ${checked?'border-rose-300 bg-rose-50':'border-gray-100'} p-4 mb-3 active:scale-[0.98] transition" onclick="${deleteMode?`toggleSelect(${r.id})`:`viewHistory(${r.id})`}">
+                <div class="flex items-center gap-3">
+                    ${deleteMode ? `<div class="w-6 h-6 rounded-lg border-2 ${checked?'bg-rose-500 border-rose-500':'border-gray-300'} flex items-center justify-center flex-shrink-0">
+                        ${checked?'<i class="fas fa-check text-white text-xs"></i>':''}
+                    </div>` : ''}
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-[11px] text-gray-400 flex items-center gap-1"><i class="fas fa-calendar"></i> ${r.date} ${r.houseType?'• '+r.houseType:''}</span>
+                            ${f>0?`<span class="text-[10px] font-bold bg-rose-100 text-rose-600 px-2 py-0.5 rounded-full">${f} ปัญหา</span>`:`<span class="text-[10px] font-bold bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full">ผ่านทั้งหมด</span>`}
+                        </div>
+                        <h4 class="text-sm font-bold text-gray-800">${r.address}</h4>
+                        <p class="text-xs text-gray-400 mt-1">เจ้าของ: ${r.ownerName}</p>
+                        <div class="flex gap-2 mt-2">
+                            <span class="text-[10px] font-bold bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">✓ ${p} ผ่าน</span>
+                            ${f?`<span class="text-[10px] font-bold bg-rose-50 text-rose-600 px-2 py-0.5 rounded-full">✗ ${f} ปัญหา</span>`:''}
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }).join('')}
+    `;
+}
+
+function toggleDeleteMode() {
+    deleteMode = !deleteMode;
+    selectedInspections.clear();
+    renderHistory();
+}
+
+function toggleSelect(id) {
+    if (selectedInspections.has(id)) selectedInspections.delete(id);
+    else selectedInspections.add(id);
+    renderHistory();
+}
+
+function deleteSelected() {
+    if (!selectedInspections.size) return;
+    if (!confirm(`ลบ ${selectedInspections.size} รายการที่เลือก?`)) return;
+    inspections = inspections.filter(r => !selectedInspections.has(r.id));
+    localStorage.setItem('inspections', JSON.stringify(inspections));
+    selectedInspections.clear();
+    renderHistory();
+    showToast('ลบรายการที่เลือกแล้ว','success');
+}
+
+function deleteAllInspections() {
+    if (!confirm('ลบประวัติทั้งหมด? การกระทำนี้ไม่สามารถย้อนกลับได้')) return;
+    inspections = [];
+    localStorage.setItem('inspections', JSON.stringify(inspections));
+    selectedInspections.clear();
+    deleteMode = false;
+    renderHistory();
+    showToast('ลบประวัติทั้งหมดแล้ว','success');
 }
 
 function viewHistory(id) {
