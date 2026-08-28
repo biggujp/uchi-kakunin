@@ -974,16 +974,25 @@ function generatePDF() {
     <!-- ===== COVER PAGE ===== -->
     <div style="width:210mm;min-height:297mm;padding:20mm;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);color:white;page-break-after:always;">
         <div style="text-align:center;">
-            <div style="width:100px;height:100px;margin:0 auto 30px;background:rgba(255,255,255,0.15);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:48px;">🏠</div>
-            <h1 style="font-size:36px;font-weight:800;margin-bottom:8px;letter-spacing:-0.5px;">รายงานตรวจเช็คบ้าน</h1>
-            <p style="font-size:16px;opacity:0.85;margin-bottom:40px;">House Inspection Report</p>
-            <div style="background:rgba(255,255,255,0.15);border-radius:16px;padding:24px 40px;display:inline-block;text-align:left;font-size:15px;line-height:2;">
+            <div style="width:100px;height:100px;margin:0 auto 20px;background:rgba(255,255,255,0.15);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:48px;">🏠</div>
+            <h1 style="font-size:36px;font-weight:800;margin-bottom:6px;letter-spacing:-0.5px;">รายงานตรวจเช็คบ้าน</h1>
+            <p style="font-size:16px;opacity:0.85;margin-bottom:24px;">House Inspection Report</p>
+            <div style="background:rgba(255,255,255,0.15);border-radius:16px;padding:20px 40px;display:inline-block;text-align:left;font-size:15px;line-height:2;">
                 <div><strong>วันที่ตรวจ:</strong> ${r.date}</div>
                 <div><strong>เจ้าของบ้าน:</strong> ${r.ownerName}</div>
                 <div><strong>ที่อยู่:</strong> ${r.address}</div>
                 <div><strong>ประเภทบ้าน:</strong> ${r.houseType||'-'}</div>
                 <div><strong>ผู้ตรวจ:</strong> ${r.inspectorName||'-'}</div>
             </div>
+            ${r.housePhotos?.length ? `
+            <div style="margin-top:24px;">
+                <p style="font-size:13px;opacity:0.8;margin-bottom:10px;">📸 รูปหน้าบ้าน</p>
+                <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;">
+                    ${r.housePhotos.slice(0,4).map(src=>`<img src="${src}" style="width:120px;height:120px;object-fit:cover;border-radius:12px;border:3px solid rgba(255,255,255,0.3);">`).join('')}
+                </div>
+                ${r.housePhotos.length > 4 ? `<p style="font-size:11px;opacity:0.6;margin-top:6px;">+ ${r.housePhotos.length - 4} รูปเพิ่มเติม</p>` : ''}
+            </div>
+            ` : ''}
         </div>
     </div>
 
