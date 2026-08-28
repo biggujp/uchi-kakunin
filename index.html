@@ -252,6 +252,11 @@
         </button>
     </div>
 
+    <!-- Backup submit button (visible when sticky bar might not work) -->
+    <button onclick="submitInspection()" class="w-full mb-4 py-3 rounded-2xl bg-gradient-to-r from-brand-500 via-brand-600 to-violet-600 text-white font-bold text-sm shadow-lg shadow-brand-500/25 active:scale-[0.98] transition flex items-center justify-center gap-2 sm:hidden">
+        <i class="fas fa-paper-plane"></i> บันทึกรายงานการตรวจ
+    </button>
+
     <!-- ข้อมูลทรัพย์สิน -->
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
         <div class="px-5 py-4 bg-gradient-to-r from-brand-500 to-brand-600 text-white flex items-center gap-3">
@@ -535,16 +540,7 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-// Ensure submit button works on all mobile browsers
-document.addEventListener('DOMContentLoaded', () => {
-    const btn = document.getElementById('submitBtn');
-    if (btn) {
-        btn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            submitInspection();
-        });
-    }
-});
+// touchend removed - e.preventDefault() was blocking clicks on some devices
 
 // ===== NAV =====
 function switchPage(id) {
@@ -569,16 +565,42 @@ function switchPage(id) {
     window.scrollTo({top:0,behavior:'smooth'});
 }
 
-// ===== HOUSE PHOTOS =====
-function handleHousePhotos(input) {
-    Array.from(input.files).forEach(file => {
+// ===== IMAGE COMPRESSION =====
+function compressImage(file, maxWidth, quality) {
+    return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = e => {
-            housePhotos.push(e.target.result);
-            renderHousePhotos();
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let w = img.width, h = img.height;
+                if (w > maxWidth) { h = (maxWidth / w) * h; w = maxWidth; }
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/jpeg', quality || 0.7));
+            };
+            img.src = e.target.result;
         };
         reader.readAsDataURL(file);
     });
+}
+
+// ===== HOUSE PHOTOS =====
+async function handleHousePhotos(input) {
+    for (const file of Array.from(input.files)) {
+        try {
+            const compressed = await compressImage(file, 800, 0.7);
+            housePhotos.push(compressed);
+        } catch(err) {
+            console.error('Photo compress error:', err);
+            // Fallback: use original
+            const reader = new FileReader();
+            reader.onload = e => housePhotos.push(e.target.result);
+            reader.readAsDataURL(file);
+        }
+    }
+    renderHousePhotos();
+    input.value = '';
 }
 
 function renderHousePhotos() {
@@ -773,15 +795,20 @@ function renderIssues(itemId) {
 
 function updateIssueNote(itemId, idx, val) { inspectionData[itemId].issues[idx].note = val; }
 
-function handleIssuePhoto(itemId, idx, input) {
-    Array.from(input.files).forEach(file => {
-        const reader = new FileReader();
-        reader.onload = e => {
-            inspectionData[itemId].issues[idx].photos.push(e.target.result);
-            renderIssues(itemId);
-        };
-        reader.readAsDataURL(file);
-    });
+async function handleIssuePhoto(itemId, idx, input) {
+    for (const file of Array.from(input.files)) {
+        try {
+            const compressed = await compressImage(file, 600, 0.6);
+            inspectionData[itemId].issues[idx].photos.push(compressed);
+        } catch(err) {
+            console.error('Issue photo compress error:', err);
+            const reader = new FileReader();
+            reader.onload = e => inspectionData[itemId].issues[idx].photos.push(e.target.result);
+            reader.readAsDataURL(file);
+        }
+    }
+    renderIssues(itemId);
+    input.value = '';
 }
 
 function removeIssuePhoto(itemId, issueIdx, photoIdx) {
@@ -913,6 +940,14 @@ function highlightField(el) {
 }
 
 function submitInspection() {
+    try {
+    _submitInspectionInner();
+    } catch(e) {
+        console.error('submitInspection error:', e);
+        showToast('เกิดข้อผิดพลาดในการบันทึก: ' + e.message, 'error');
+    }
+}
+function _submitInspectionInner() {
     console.log('submitInspection called', { editingInspectionId, inspectionDataKeys: Object.keys(inspectionData).length });
     const errors = [];
     const ownerEl = document.getElementById('ownerName');
