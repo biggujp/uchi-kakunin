@@ -2280,6 +2280,8 @@ function openUserMenu() {
     const modal = document.getElementById('userMenuModal');
     const content = document.getElementById('userMenuContent');
     modal.classList.remove('hidden');
+    const submitBar = document.getElementById('submitBar');
+    if (submitBar) submitBar.style.display = 'none';
 
     if (currentUser) {
         const roleLabels = { admin:'\Admin', inspector:'Inspector', viewer:'Viewer' };
@@ -2316,6 +2318,11 @@ function openUserMenu() {
 
 function closeUserMenu() {
     document.getElementById('userMenuModal').classList.add('hidden');
+    const submitBar = document.getElementById('submitBar');
+    const inspectPage = document.getElementById('pg-inspect');
+    if (submitBar && inspectPage && !inspectPage.classList.contains('hidden')) {
+        submitBar.style.display = 'block';
+    }
 }
 
 // ===== USERS MANAGEMENT =====
