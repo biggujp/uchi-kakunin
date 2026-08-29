@@ -324,7 +324,15 @@
         </div>
     </div>
 
-    <!-- Checklist Sections -->    <div id="checklistContainer" class="space-y-3" style="padding-bottom:100px;"></div>
+    <!-- Checklist Sections -->
+    <div id="checklistPlaceholder" class="text-center py-8">
+        <div class="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-3">
+            <i class="fas fa-clipboard-check text-2xl text-gray-300"></i>
+        </div>
+        <p class="text-sm font-semibold text-gray-400">กรุณากรอกข้อมูลทรัพย์สินก่อน</p>
+        <p class="text-xs text-gray-300 mt-1">ชื่อเจ้าของบ้าน และ ที่อยู่ ต้องไม่ว่างเปล่า</p>
+    </div>
+    <div id="checklistContainer" class="space-y-3 hidden" style="padding-bottom:100px;"></div>
 
 </div>
 
@@ -522,7 +530,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // Show submit bar on inspect page (default page)
     const submitBar = document.getElementById('submitBar');
     if (submitBar) submitBar.style.display = 'block';
+    // Checklist visibility: show only when property info is filled
+    updateChecklistVisibility();
+    ['ownerName', 'address'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updateChecklistVisibility);
+    });
 });
+
+function updateChecklistVisibility() {
+    const name = (document.getElementById('ownerName').value || '').trim();
+    const addr = (document.getElementById('address').value || '').trim();
+    const filled = name.length > 0 && addr.length > 0;
+    document.getElementById('checklistPlaceholder').classList.toggle('hidden', filled);
+    document.getElementById('checklistContainer').classList.toggle('hidden', !filled);
+}
 
 // Re-show submit bar when page regains focus (after camera capture)
 document.addEventListener('visibilitychange', () => {
@@ -1200,9 +1221,7 @@ async function _submitInspectionInner() {
     // Sync to API (online or queue for offline)
     syncToAPI(report);
 
-    const msg = wasEditing
-        ? 'แก้ไขรายการสำเร็จ! ✓'
-        : (isOnline ? 'บันทึกรายงานสำเร็จ! ✓' : 'บันทึกลงเครื่อง - จะซิงค์เมื่อมีสัญญาณ 📡');
+    const msg = wasEditing ? 'แก้ไขรายการสำเร็จ! ✓' : 'บันทึกรายงานสำเร็จ! ✓';
     showToast(msg, 'success');
     setTimeout(() => switchPage('report'), 400);
 }
@@ -1646,7 +1665,7 @@ function renderSyncStatus() {
             <div class="w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}"></div>
             <div class="flex-1">
                 <p class="text-sm font-semibold ${isOnline ? 'text-emerald-600' : 'text-rose-600'}">${isOnline ? '🟢 ออนไลน์' : '🔴 ออฟไลน์'}</p>
-                <p class="text-[11px] text-gray-400">${isOnline ? 'ข้อมูลจะซิงค์ทันที' : 'ข้อมูลจะซิงค์เมื่อกลับมาออนไลน์'}</p>
+                <p class="text-[11px] text-gray-400">${isOnline ? 'ข้อมูลจะซิงค์ทันที' : 'กรุณาเชื่อมต่ออินเทอร์เน็ต'}</p>
             </div>
         </div>
     `;
@@ -1711,8 +1730,7 @@ async function loadSaved() {
 // ===== API SYNC =====
 async function syncToAPI(r) {
     if (!isOnline || !API_BASE || !authToken) {
-        // Offline - add to sync queue
-        addToSyncQueue('create_inspection', r);
+        showToast('❌ ไม่สามารถบันทึกได้ - ไม่มีสัญญาณอินเทอร์เน็ต','error');
         return;
     }
     try {
@@ -1723,7 +1741,7 @@ async function syncToAPI(r) {
         });
         if (!res.ok) throw new Error('Sync failed');
     } catch(e) {
-        addToSyncQueue('create_inspection', r);
+        showToast('❌ บันทึกไม่สำเร็จ - กรุณาลองใหม่','error');
     }
 }
 async function syncData() {
@@ -2238,7 +2256,7 @@ window.addEventListener('online', () => {
 
 window.addEventListener('offline', () => {
     isOnline = false;
-    showToast('📡 ไม่มีสัญญาณ - บันทึกลงเครื่องอัตโนมัติ','');
+    showToast('❌ ไม่มีสัญญาณอินเทอร์เน็ต - กรุณาเชื่อมต่ออินเทอร์เน็ตก่อนใช้งาน','error');
     renderSyncStatus();
 });
 
@@ -2394,11 +2412,7 @@ function deleteCustomItem(sectionId, itemId) {
 
 // ===== SYNC CUSTOM ITEMS TO SERVER =====
 async function syncCustomItemsToServer() {
-    if (!isOnline || !API_BASE || !authToken) {
-        // Offline - add to queue
-        addToSyncQueue('save_custom_items', { items: customItems });
-        return;
-    }
+    if (!isOnline || !API_BASE || !authToken) return;
 
     try {
         const res = await fetch(`${API_BASE}/custom-items`, {
@@ -2411,8 +2425,7 @@ async function syncCustomItemsToServer() {
         });
         if (!res.ok) throw new Error('Sync failed');
     } catch (e) {
-        // If sync fails, add to queue
-        addToSyncQueue('save_custom_items', { items: customItems });
+        // Silent fail for custom items sync
     }
 }
 
