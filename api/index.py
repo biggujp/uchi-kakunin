@@ -933,6 +933,29 @@ def get_notifications():
         return jsonify({"error": str(e)}), 500
 
 
+def _create_notification_internal(target_user_id, notif_type, title, message, link=""):
+    """สร้าง notification โดยไม่ต้องมี auth (ใช้ภายใน)"""
+    try:
+        client = get_google_sheets_client()
+        if not client:
+            return False
+
+        ws = get_or_create_worksheet(client, NOTIFICATION_SHEET, [
+            "NotifID", "UserID", "Type", "Title", "Message", "Link", "Read", "CreatedAt"
+        ])
+        if not ws:
+            return False
+
+        notif_id = f"notif_{secrets.token_hex(8)}"
+        ws.append_row([
+            notif_id, target_user_id, notif_type, title, message,
+            link, "false", datetime.now().isoformat()
+        ], value_input_option="USER_ENTERED")
+        return True
+    except Exception:
+        return False
+
+
 @app.route("/api/notifications", methods=["POST"])
 @require_auth
 def create_notification():
@@ -1477,6 +1500,19 @@ def join_team_session(session_id):
                     members.append({"userId": user_id, "displayName": display_name})
                     ws.update_cell(idx, 5, json.dumps(members, ensure_ascii=False))
                     ws.update_cell(idx, 8, datetime.now().isoformat())
+
+                    # Send push notification to ALL existing team members
+                    owner_name = r.get("OwnerName", "")
+                    address = r.get("Address", "")
+                    existing_member_ids = [m.get("userId") for m in members if m.get("userId") and m.get("userId") != user_id]
+                    for member_id in existing_member_ids:
+                        _create_notification_internal(
+                            target_user_id=member_id,
+                            notif_type="team_member_joined",
+                            title="👥 สมาชิกใหม่เข้าทีม",
+                            message=f"{display_name} เข้าร่วมทีมตรวจที่ {address or owner_name} แล้ว",
+                            link=f"team:{session_id}"
+                        )
 
                 return jsonify({"status": "ok", "message": "Joined team"})
 

@@ -109,7 +109,10 @@
     <div class="absolute top-[60px] right-0 w-full sm:w-96 max-h-[80vh] bg-white rounded-b-2xl sm:rounded-2xl shadow-2xl overflow-hidden anim-slide-up" onclick="event.stopPropagation()">
         <div class="px-5 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white flex items-center justify-between">
             <h2 class="font-bold text-sm flex items-center gap-2"><i class="fas fa-bell"></i> การแจ้งเตือน</h2>
-            <div class="flex gap-2">
+            <div class="flex gap-2 items-center">
+                <button id="pushPermBtn" onclick="requestPushPermission()" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/20 hover:bg-white/30 transition hidden">
+                    🔔 เปิด Push
+                </button>
                 <button onclick="markAllRead()" class="text-white/70 hover:text-white text-[11px] font-semibold transition">อ่านทั้งหมด</button>
                 <button onclick="closeNotificationPanel()" class="text-white/70 hover:text-white"><i class="fas fa-xmark"></i></button>
             </div>
@@ -639,6 +642,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     // Restore team session if exists
     restoreTeamSession();
+    // Init push notifications
+    initPushNotifications();
 });
 
 function updateChecklistVisibility() {
@@ -2557,6 +2562,7 @@ function renderNotifications() {
     const typeIcons = {
         'new_inspection': '📋',
         'shared_report': '🔗',
+        'team_member_joined': '👥',
         'info': 'ℹ️',
         'warning': '⚠️',
         'success': '✅'
@@ -2564,6 +2570,7 @@ function renderNotifications() {
     const typeColors = {
         'new_inspection': 'bg-blue-50 border-blue-200',
         'shared_report': 'bg-violet-50 border-violet-200',
+        'team_member_joined': 'bg-purple-50 border-purple-200',
         'info': 'bg-gray-50 border-gray-200',
         'warning': 'bg-amber-50 border-amber-200',
         'success': 'bg-emerald-50 border-emerald-200'
@@ -2670,6 +2677,7 @@ function checkAuth() {
                 loadSharedReports();
                 loadCustomItemsFromServer();
                 checkUnreadCount();
+                startNotifPoll();
                 // Process any pending sync queue items
                 if (syncQueue.length > 0) {
                     setTimeout(() => processSyncQueue(), 2000);
@@ -2735,6 +2743,7 @@ async function doLogin() {
             loadSharedReports();
             loadCustomItemsFromServer();
             checkUnreadCount();
+            startNotifPoll();
             // Process pending sync queue
             if (syncQueue.length > 0) {
                 setTimeout(() => processSyncQueue(), 1000);
@@ -2773,6 +2782,7 @@ async function doRegister() {
                 setTimeout(() => showToast(`⚠️ ${data.warning || 'โหมดออฟไลน์ - ข้อมูลไม่ได้บันทึกลง Google Sheets'}`, 'error'), 1500);
             }
             loadUsers();
+            startNotifPoll();
         } else {
             showToast(data.error || 'สมัครไม่สำเร็จ','error');
         }
@@ -2785,6 +2795,7 @@ function doLogout() {
     authToken = '';
     currentUser = null;
     localStorage.removeItem('authToken');
+    stopNotifPoll();
     updateUserUI();
     closeUserMenu();
     showToast('ออกจากระบบแล้ว','');
@@ -3737,6 +3748,114 @@ function generateComparisonPDF() {
     printWin.document.close();
     setTimeout(() => { printWin.print(); }, 800);
     showToast('เปิดหน้าต่างพิมพ์แล้ว - เลือก Save as PDF','success');
+}
+
+// ===== PUSH NOTIFICATIONS =====
+let pushPermission = 'default';
+let lastNotifCheck = 0;
+let notifPollInterval = null;
+
+function initPushNotifications() {
+    if (!('Notification' in window)) return;
+    pushPermission = Notification.permission;
+    updatePushPermBtn();
+}
+
+function updatePushPermBtn() {
+    const btn = document.getElementById('pushPermBtn');
+    if (!btn) return;
+    if (pushPermission === 'granted') {
+        btn.textContent = '🔔 Push เปิดแล้ว';
+        btn.classList.add('hidden');
+    } else if (pushPermission === 'denied') {
+        btn.textContent = '🔕 Push ถูกบล็อก';
+        btn.classList.add('hidden');
+    } else {
+        btn.textContent = '🔔 เปิด Push';
+        btn.classList.remove('hidden');
+    }
+}
+
+async function requestPushPermission() {
+    if (!('Notification' in window)) {
+        showToast('เบราว์เซอร์ไม่รองรับ Push Notification', 'error');
+        return;
+    }
+    try {
+        const result = await Notification.requestPermission();
+        pushPermission = result;
+        updatePushPermBtn();
+        if (result === 'granted') {
+            showToast('เปิด Push Notification แล้ว!', 'success');
+        } else {
+            showToast('ไม่ได้รับสิทธิ์ Push Notification', '');
+        }
+    } catch(e) {
+        showToast('ไม่สามารถขอสิทธิ์ Push ได้', 'error');
+    }
+}
+
+function showBrowserNotification(title, body, icon) {
+    if (pushPermission !== 'granted') return;
+    try {
+        const n = new Notification(title, {
+            body: body,
+            icon: icon || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="0.9em" font-size="80">🏠</text></svg>',
+            badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="0.9em" font-size="80">👥</text></svg>',
+            tag: 'uchi-notification',
+            renotify: true,
+            requireInteraction: false
+        });
+        n.onclick = function() {
+            window.focus();
+            n.close();
+        };
+        setTimeout(() => n.close(), 8000);
+    } catch(e) {}
+}
+
+let previousUnreadCount = 0;
+
+async function pollNotifications() {
+    if (!API_BASE || !authToken) return;
+    try {
+        const res = await fetch(`${API_BASE}/notifications/unread-count`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        const newUnread = data.unread || 0;
+
+        if (newUnread > previousUnreadCount && previousUnreadCount > 0) {
+            // New notification arrived!
+            const diff = newUnread - previousUnreadCount;
+            const notifRes = await fetch(`${API_BASE}/notifications`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const notifData = await notifRes.json();
+            if (notifData.notifications) {
+                const latest = notifData.notifications.find(n => !n.read);
+                if (latest) {
+                    showBrowserNotification(latest.title, latest.message);
+                    showToast(`${latest.title}: ${latest.message}`);
+                }
+            }
+        }
+        previousUnreadCount = newUnread;
+        unreadCount = newUnread;
+        updateNotifBadge();
+    } catch(e) {}
+}
+
+function startNotifPoll() {
+    if (notifPollInterval) clearInterval(notifPollInterval);
+    notifPollInterval = setInterval(pollNotifications, 10000);
+}
+
+function stopNotifPoll() {
+    if (notifPollInterval) {
+        clearInterval(notifPollInterval);
+        notifPollInterval = null;
+    }
 }
 
 // ===== TOAST =====
