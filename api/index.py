@@ -651,6 +651,26 @@ def test_sheets():
         return jsonify(result)
 
 
+@app.route("/api/debug-sheets", methods=["GET"])
+def debug_sheets():
+    """Debug: show raw sheet data"""
+    try:
+        client = get_google_sheets_client()
+        if not client:
+            return jsonify({"error": "no client"})
+        spreadsheet = client.open_by_key(GOOGLE_SHEETS_ID)
+        ws = spreadsheet.worksheet(USERS_SHEET)
+        all_values = ws.get_all_values()
+        return jsonify({
+            "total_rows": len(all_values),
+            "headers": all_values[0] if all_values else [],
+            "first_3_rows": all_values[1:4] if len(all_values) > 1 else [],
+            "raw_all_values_len": len(all_values)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
 @app.route("/api/inspections", methods=["GET"])
 @require_auth
 def get_inspections():
