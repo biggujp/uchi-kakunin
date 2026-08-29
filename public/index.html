@@ -948,14 +948,25 @@ let editingInspectionId = null;
 function startNewInspection() {
     editingInspectionId = null;
     document.getElementById('editModeBanner').classList.add('hidden');
+
+    // Clear form fields
+    ['ownerName','address','inspectionDate','houseType','inspectorName'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+
+    // Clear house photos
+    housePhotos = [];
+    renderHousePhotos();
+
     // Reset inspectionData for new inspection
     inspectionData = {};
-    // Re-init default items
     CHECKLIST.forEach(sec => {
         getSectionItems(sec.id).forEach(it => {
-            if (!inspectionData[it.id]) inspectionData[it.id] = { status: null, issues: [] };
+            inspectionData[it.id] = { status: null, issues: [] };
         });
     });
+
     renderChecklist();
     switchPage('inspect');
 }
