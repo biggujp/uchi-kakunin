@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script>
         tailwind.config = {
@@ -1365,6 +1366,9 @@ function generateReport(r) {
         <button onclick="generatePDF()" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white font-bold text-sm shadow-lg shadow-brand-500/20 active:scale-[0.98] transition flex items-center justify-center gap-2">
             <i class="fas fa-file-pdf"></i> PDF
         </button>
+        <button onclick="exportExcel()" class="py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 active:scale-[0.98] transition flex items-center justify-center gap-2">
+            <i class="fas fa-file-excel"></i>
+        </button>
         <button onclick="shareReport()" class="py-3 px-4 rounded-xl bg-gradient-to-r from-violet-500 to-violet-600 text-white font-bold text-sm shadow-lg shadow-violet-500/20 active:scale-[0.98] transition flex items-center justify-center gap-2">
             <i class="fas fa-share-nodes"></i>
         </button>
@@ -1565,6 +1569,78 @@ function generatePDF() {
     printWin.document.close();
     setTimeout(() => { printWin.print(); }, 800);
     showToast('เปิดหน้าต่างพิมพ์แล้ว - เลือก Save as PDF','success');
+}
+
+// ===== EXCEL EXPORT =====
+function exportExcel() {
+    if (!currentInspection) return showToast('ไม่มีรายงานให้ Export','error');
+    if (typeof XLSX === 'undefined') return showToast('กำลังโหลด Excel library...','error');
+
+    const r = currentInspection;
+    let pass=0, fail=0, na=0;
+    Object.values(r.data).forEach(d=>{if(d.status==='pass')pass++;else if(d.status==='fail')fail++;else if(d.status==='na')na++;});
+
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: ข้อมูลทรัพย์สิน
+    const infoData = [
+        ['รายงานผลการตรวจเช็คบ้าน'],
+        ['Uchi Kakunin Setsubi'],
+        [],
+        ['วันที่ตรวจ', r.date],
+        ['เจ้าของบ้าน', r.ownerName],
+        ['ที่อยู่', r.address],
+        ['ประเภทบ้าน', r.houseType || '-'],
+        ['ผู้ตรวจ', r.inspectorName || '-'],
+        [],
+        ['สรุปผล'],
+        ['ผ่าน', pass],
+        ['มีปัญหา', fail],
+        ['ไม่มีรายการ', na],
+        ['รวมทั้งหมด', pass+fail+na]
+    ];
+    const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
+    wsInfo['!cols'] = [{wch:20},{wch:40}];
+    XLSX.utils.book_append_sheet(wb, wsInfo, 'ข้อมูลทรัพย์สิน');
+
+    // Sheet 2: ผลการตรวจ
+    const checkData = [['หมวด', 'รายการ', 'ผลการตรวจ', 'รายละเอียดปัญหา']];
+    CHECKLIST.forEach(sec => {
+        getSectionItems(sec.id).forEach(it => {
+            const d = r.data[it.id];
+            if (!d) return;
+            const status = d.status === 'pass' ? '✓ ผ่าน' : d.status === 'fail' ? '✗ มีปัญหา' : d.status === 'na' ? '⊘ ไม่มีรายการ' : '-';
+            const issues = (d.issues || []).map(is => is.note).filter(Boolean).join('; ');
+            checkData.push([sec.title, it.text, status, issues || '-']);
+        });
+    });
+    const wsCheck = XLSX.utils.aoa_to_sheet(checkData);
+    wsCheck['!cols'] = [{wch:20},{wch:35},{wch:15},{wch:50}];
+    XLSX.utils.book_append_sheet(wb, wsCheck, 'ผลการตรวจ');
+
+    // Sheet 3: จุดที่ต้องแก้ไข
+    if (fail > 0) {
+        const issueData = [['#', 'หมวด', 'รายการ', 'รายละเอียด', 'รูปภาพ']];
+        let idx = 0;
+        CHECKLIST.forEach(sec => {
+            getSectionItems(sec.id).forEach(it => {
+                const d = r.data[it.id];
+                if (d?.status !== 'fail' || !d.issues?.length) return;
+                d.issues.forEach(iss => {
+                    idx++;
+                    issueData.push([idx, sec.title, it.text, iss.note || '-', (iss.photos||[]).length + ' รูป']);
+                });
+            });
+        });
+        const wsIssue = XLSX.utils.aoa_to_sheet(issueData);
+        wsIssue['!cols'] = [{wch:5},{wch:20},{wch:35},{wch:50},{wch:10}];
+        XLSX.utils.book_append_sheet(wb, wsIssue, 'จุดที่ต้องแก้ไข');
+    }
+
+    // Download
+    const fileName = `รายงานตรวจ_${r.ownerName}_${r.date}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    showToast('ส่งออก Excel สำเร็จ! ✓','success');
 }
 
 // ===== HISTORY =====
