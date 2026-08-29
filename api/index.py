@@ -232,7 +232,10 @@ def register():
             })
 
         # Check duplicate
-        records = ws.get_all_records()
+        try:
+            records = ws.get_all_records()
+        except Exception:
+            records = []
         for r in records:
             if r.get("Username") == username and r.get("Active") == "true":
                 return jsonify({"error": "Username นี้ถูกใช้แล้ว"}), 400
@@ -312,7 +315,10 @@ def login():
             })
 
         password_hash = hashlib.sha256(password.encode()).hexdigest()
-        records = ws.get_all_records()
+        try:
+            records = ws.get_all_records()
+        except Exception:
+            records = []
 
         for r in records:
             if (r.get("Username") == username and
@@ -389,7 +395,10 @@ def get_users():
         if not ws:
             return jsonify({"status": "ok", "users": [], "mode": "offline", "error": "Users sheet not found - check GOOGLE_SHEETS_ID"})
 
-        records = ws.get_all_records()
+        try:
+            records = ws.get_all_records()
+        except Exception:
+            records = []
         users = []
         for r in records:
             uid = r.get("UserID", "")
