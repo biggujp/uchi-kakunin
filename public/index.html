@@ -1372,27 +1372,65 @@ function generatePDF() {
     </head><body>
 
     <!-- ===== COVER PAGE ===== -->
-    <div style="width:210mm;min-height:297mm;padding:20mm;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);color:white;page-break-after:always;">
-        <div style="text-align:center;">
-            <div style="width:100px;height:100px;margin:0 auto 20px;background:rgba(255,255,255,0.15);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:48px;">🏠</div>
-            <h1 style="font-size:36px;font-weight:800;margin-bottom:6px;letter-spacing:-0.5px;">รายงานตรวจเช็คบ้าน</h1>
-            <p style="font-size:16px;opacity:0.85;margin-bottom:24px;">House Inspection Report</p>
-            <div style="background:rgba(255,255,255,0.15);border-radius:16px;padding:20px 40px;display:inline-block;text-align:left;font-size:15px;line-height:2;">
-                <div><strong>วันที่ตรวจ:</strong> ${r.date}</div>
-                <div><strong>เจ้าของบ้าน:</strong> ${r.ownerName}</div>
-                <div><strong>ที่อยู่:</strong> ${r.address}</div>
-                <div><strong>ประเภทบ้าน:</strong> ${r.houseType||'-'}</div>
-                <div><strong>ผู้ตรวจ:</strong> ${r.inspectorName||'-'}</div>
+    <div style="width:210mm;min-height:297mm;padding:25mm 30mm;background:#ffffff;color:#1f2937;page-break-after:always;display:flex;flex-direction:column;">
+        <!-- Header line -->
+        <div style="border-bottom:3px solid #2563eb;padding-bottom:12px;margin-bottom:30px;">
+            <p style="font-size:13px;color:#6b7280;margin:0;letter-spacing:2px;">Uchi Kakunin Setsubi</p>
+        </div>
+
+        <!-- Title -->
+        <div style="text-align:center;margin-bottom:30px;">
+            <h1 style="font-size:32px;font-weight:700;color:#111827;margin:0 0 4px 0;">รายงานผลการตรวจเช็คบ้าน</h1>
+            <p style="font-size:14px;color:#9ca3af;margin:0;">House Inspection Report</p>
+        </div>
+
+        <!-- House Photo (large, centered) -->
+        ${r.housePhotos?.length ? `
+        <div style="text-align:center;margin-bottom:30px;">
+            <img src="${r.housePhotos[0]}" style="width:480px;height:320px;object-fit:cover;border-radius:12px;border:1px solid #e5e7eb;box-shadow:0 4px 20px rgba(0,0,0,0.08);">
+            ${r.housePhotos.length > 1 ? `
+            <div style="display:flex;justify-content:center;gap:8px;margin-top:12px;">
+                ${r.housePhotos.slice(1,4).map(src=>`<img src="${src}" style="width:100px;height:70px;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb;">`).join('')}
+                ${r.housePhotos.length > 4 ? `<div style="width:100px;height:70px;background:#f3f4f6;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px;">+${r.housePhotos.length - 4}</div>` : ''}
+            </div>` : ''}
+        </div>
+        ` : `
+        <div style="text-align:center;margin-bottom:30px;">
+            <div style="width:480px;height:320px;margin:0 auto;background:#f9fafb;border-radius:12px;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;">
+                <span style="font-size:64px;">🏠</span>
             </div>
-            ${r.housePhotos?.length ? `
-            <div style="margin-top:24px;">
-                <p style="font-size:13px;opacity:0.8;margin-bottom:10px;">📸 รูปหน้าบ้าน</p>
-                <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;">
-                    ${r.housePhotos.slice(0,4).map(src=>`<img src="${src}" style="width:120px;height:120px;object-fit:cover;border-radius:12px;border:3px solid rgba(255,255,255,0.3);">`).join('')}
-                </div>
-                ${r.housePhotos.length > 4 ? `<p style="font-size:11px;opacity:0.6;margin-top:6px;">+ ${r.housePhotos.length - 4} รูปเพิ่มเติม</p>` : ''}
-            </div>
-            ` : ''}
+        </div>
+        `}
+
+        <!-- Property Info -->
+        <div style="flex:1;">
+            <table style="width:100%;border-collapse:collapse;font-size:14px;">
+                <tr>
+                    <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;width:35%;color:#6b7280;">วันที่ตรวจ</td>
+                    <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-weight:500;">${r.date}</td>
+                </tr>
+                <tr>
+                    <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;color:#6b7280;">เจ้าของบ้าน</td>
+                    <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-weight:500;">${r.ownerName}</td>
+                </tr>
+                <tr>
+                    <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;color:#6b7280;">ที่อยู่</td>
+                    <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-weight:500;">${r.address}</td>
+                </tr>
+                <tr>
+                    <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;color:#6b7280;">ประเภทบ้าน</td>
+                    <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-weight:500;">${r.houseType||'-'}</td>
+                </tr>
+                <tr>
+                    <td style="padding:12px 16px;color:#6b7280;">ผู้ตรวจ</td>
+                    <td style="padding:12px 16px;font-weight:500;">${r.inspectorName||'-'}</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Footer -->
+        <div style="border-top:1px solid #e5e7eb;padding-top:12px;margin-top:auto;text-align:center;">
+            <p style="font-size:11px;color:#9ca3af;margin:0;">Uchi Kakunin Setsubi — ระบบตรวจเช็คบ้าน</p>
         </div>
     </div>    <!-- ===== SUMMARY PAGE ===== -->
     <div style="width:794px;padding:42px 56px;">
