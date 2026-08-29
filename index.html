@@ -1250,6 +1250,14 @@ async function _submitInspectionInner() {
 
     const msg = wasEditing ? 'แก้ไขรายการสำเร็จ! ✓' : 'บันทึกรายงานสำเร็จ! ✓';
     showToast(msg, 'success');
+
+    // Create local notification
+    if (wasEditing) {
+        addLocalNotification('info', '✏️ แก้ไขรายการ', `แก้ไขรายงาน ${owner} - ${addr}`, report.id);
+    } else {
+        addLocalNotification('new_inspection', '📋 บันทึกรายการตรวจใหม่', `${owner} - ${addr}`, report.id);
+    }
+
     setTimeout(() => switchPage('report'), 400);
 }
 
@@ -1643,6 +1651,23 @@ function exportExcel() {
     showToast('ส่งออก Excel สำเร็จ! ✓','success');
 }
 
+// ===== LOCAL NOTIFICATIONS =====
+let localNotifications = JSON.parse(localStorage.getItem('localNotifications') || '[]');
+
+function addLocalNotification(type, title, message, link) {
+    const notif = {
+        id: 'ln_' + Date.now() + '_' + Math.random().toString(36).substr(2,5),
+        type, title, message, link: link || '',
+        read: false,
+        createdAt: new Date().toISOString()
+    };
+    localNotifications.unshift(notif);
+    if (localNotifications.length > 50) localNotifications = localNotifications.slice(0, 50);
+    localStorage.setItem('localNotifications', JSON.stringify(localNotifications));
+    unreadCount++;
+    updateNotifBadge();
+}
+
 // ===== HISTORY =====
 let selectedInspections = new Set();
 let deleteMode = false;
@@ -1932,40 +1957,44 @@ function closeNotificationPanel() {
 }
 
 async function loadNotifications() {
-    if (!API_BASE || !authToken) {
-        renderNotifications();
-        return;
+    let apiNotifs = [];
+    let apiUnread = 0;
+
+    if (API_BASE && authToken) {
+        try {
+            const res = await fetch(`${API_BASE}/notifications`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const data = await res.json();
+            if (data.notifications) {
+                apiNotifs = data.notifications;
+                apiUnread = data.unread;
+            }
+        } catch(e) {}
     }
 
-    try {
-        const res = await fetch(`${API_BASE}/notifications`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        const data = await res.json();
-        if (data.notifications) {
-            notifications = data.notifications;
-            unreadCount = data.unread;
-            updateNotifBadge();
-            renderNotifications();
-        }
-    } catch(e) {
-        renderNotifications();
-    }
+    // Merge: API + local notifications, sorted by date
+    notifications = [...apiNotifs, ...localNotifications]
+        .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+    unreadCount = apiUnread + localNotifications.filter(n => !n.read).length;
+    updateNotifBadge();
+    renderNotifications();
 }
 
 async function checkUnreadCount() {
-    if (!API_BASE || !authToken) return;
-
-    try {
-        const res = await fetch(`${API_BASE}/notifications/unread-count`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        const data = await res.json();
-        if (data.unread !== undefined) {
-            unreadCount = data.unread;
-            updateNotifBadge();
-        }
-    } catch(e) {}
+    let apiUnread = 0;
+    if (API_BASE && authToken) {
+        try {
+            const res = await fetch(`${API_BASE}/notifications/unread-count`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const data = await res.json();
+            if (data.unread !== undefined) apiUnread = data.unread;
+        } catch(e) {}
+    }
+    const localUnread = localNotifications.filter(n => !n.read).length;
+    unreadCount = apiUnread + localUnread;
+    updateNotifBadge();
 }
 
 function updateNotifBadge() {
@@ -2032,17 +2061,22 @@ function getTimeAgo(dateStr) {
 }
 
 async function readNotification(notifId) {
-    // Mark as read locally
+    // Mark as read in all lists
     notifications = notifications.map(n => {
         if (n.id === notifId) n.read = true;
         return n;
     });
+    localNotifications = localNotifications.map(n => {
+        if (n.id === notifId) n.read = true;
+        return n;
+    });
+    localStorage.setItem('localNotifications', JSON.stringify(localNotifications));
     unreadCount = Math.max(0, unreadCount - 1);
     updateNotifBadge();
     renderNotifications();
 
-    // Mark on server
-    if (API_BASE && authToken) {
+    // Mark on server (API notifications only)
+    if (API_BASE && authToken && !notifId.startsWith('ln_')) {
         try {
             await fetch(`${API_BASE}/notifications/${notifId}/read`, {
                 method: 'PUT',
@@ -2054,6 +2088,8 @@ async function readNotification(notifId) {
 
 async function markAllRead() {
     notifications = notifications.map(n => ({ ...n, read: true }));
+    localNotifications = localNotifications.map(n => ({ ...n, read: true }));
+    localStorage.setItem('localNotifications', JSON.stringify(localNotifications));
     unreadCount = 0;
     updateNotifBadge();
     renderNotifications();
@@ -2740,6 +2776,7 @@ function _submitReinspectionInner() {
     syncToAPI(report);
     generateComparisonReport(originalInspection, report);
     showToast('บันทึกรายงานตรวจรอบ 2 สำเร็จ! ✓','success');
+    addLocalNotification('success', '🔄 ตรวจรอบ 2 สำเร็จ', `${originalInspection.ownerName} - ${originalInspection.address}`, report.id);
     setTimeout(() => switchPage('compare'), 400);
 }
 
