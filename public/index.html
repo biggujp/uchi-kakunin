@@ -520,6 +520,18 @@
         </div>
     </div>
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-5 py-4 bg-gradient-to-r from-blue-500 to-cyan-600 text-white flex items-center gap-3">
+            <i class="fas fa-table text-lg"></i>
+            <h2 class="font-bold text-sm">ทดสอบ Google Sheets</h2>
+        </div>
+        <div class="p-5 space-y-3">
+            <div id="sheetsTestResult"></div>
+            <button onclick="testGoogleSheets()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-600 text-white font-bold text-sm active:scale-[0.98] transition">
+                <i class="fas fa-vial mr-1"></i> ทดสอบการเชื่อมต่อ Google Sheets
+            </button>
+        </div>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div class="px-5 py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center gap-3">
             <i class="fas fa-cloud text-lg"></i>
             <h2 class="font-bold text-sm">สถานะการซิงค์</h2>
@@ -2158,6 +2170,44 @@ function saveSettings() {
     showToast('บันทึกการตั้งค่าสำเร็จ!','success');
 }
 
+async function testGoogleSheets() {
+    const resultEl = document.getElementById('sheetsTestResult');
+    if (!resultEl) return;
+    resultEl.innerHTML = '<div class="p-3 rounded-xl bg-blue-50 text-blue-600 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังทดสอบ...</div>';
+    try {
+        const res = await fetch(`${API_BASE}/test-sheets`, { headers: { 'Authorization': `Bearer ${authToken || ''}` } });
+        const data = await res.json();
+        if (data.error) {
+            resultEl.innerHTML = `<div class="p-3 rounded-xl bg-rose-50 border border-rose-200">
+                <p class="text-sm font-bold text-rose-600 mb-1">❌ เชื่อมต่อไม่สำเร็จ</p>
+                <p class="text-xs text-rose-500">${data.error}</p>
+                <p class="text-[10px] text-gray-400 mt-2">ตรวจสอบใน Vercel → Settings → Environment Variables:<br>- SERVICE_ACCOUNT_JSON (ต้องเป็น JSON ที่ถูกต้อง)<br>- GOOGLE_SHEETS_ID (ต้องตรงกับ Google Sheet)</p>
+            </div>`;
+        } else if (data.client_ok && data.sheets.length) {
+            resultEl.innerHTML = `<div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                <p class="text-sm font-bold text-emerald-600 mb-1">✅ เชื่อมต่อสำเร็จ!</p>
+                <p class="text-xs text-emerald-700">Spreadsheet: ${data.spreadsheet_title || data.sheets_id}</p>
+                <p class="text-xs text-gray-500 mt-1">Sheets: ${data.sheets.join(', ')}</p>
+            </div>`;
+        } else if (data.client_ok && !data.sheets.length) {
+            resultEl.innerHTML = `<div class="p-3 rounded-xl bg-amber-50 border border-amber-200">
+                <p class="text-sm font-bold text-amber-600 mb-1">⚠️ เชื่อมต่อได้ แต่ไม่มี sheet</p>
+                <p class="text-xs text-amber-500">Google Sheet ว่างเปล่า - ระบบจะสร้าง sheet อัตโนมัติเมื่อเริ่มใช้งาน</p>
+            </div>`;
+        } else {
+            resultEl.innerHTML = `<div class="p-3 rounded-xl bg-amber-50 border border-amber-200">
+                <p class="text-sm font-bold text-amber-600 mb-1">⚠️ ตรวจสอบข้อมูล</p>
+                <p class="text-xs text-amber-500">has_sheets_id: ${data.has_sheets_id} | has_service_account: ${data.has_service_account}</p>
+            </div>`;
+        }
+    } catch(e) {
+        resultEl.innerHTML = `<div class="p-3 rounded-xl bg-rose-50 border border-rose-200">
+            <p class="text-sm font-bold text-rose-600 mb-1">❌ เชื่อมต่อ API ไม่ได้</p>
+            <p class="text-xs text-rose-500">${e.message}</p>
+        </div>`;
+    }
+}
+
 function renderSyncStatus() {
     const onlineEl = document.getElementById('syncOnlineStatus');
     const queueEl = document.getElementById('syncQueueStatus');
@@ -2531,6 +2581,9 @@ async function doLogin() {
             updateUserUI();
             closeAuthModal();
             showToast(`สวัสดี ${data.user.displayName}! 👋`,'success');
+            if (data.warning || data.mode === 'offline') {
+                setTimeout(() => showToast(`⚠️ ${data.warning || 'โหมดออฟไลน์ - ข้อมูลไม่ได้บันทึกลง Google Sheets'}`, 'error'), 1500);
+            }
             loadUsers();
             loadSharedReports();
             loadCustomItemsFromServer();
@@ -2569,6 +2622,9 @@ async function doRegister() {
             updateUserUI();
             closeAuthModal();
             showToast(`สมัครสำเร็จ! สวัสดี ${data.user.displayName}! 🎉`,'success');
+            if (data.warning || data.mode === 'offline') {
+                setTimeout(() => showToast(`⚠️ ${data.warning || 'โหมดออฟไลน์ - ข้อมูลไม่ได้บันทึกลง Google Sheets'}`, 'error'), 1500);
+            }
             loadUsers();
         } else {
             showToast(data.error || 'สมัครไม่สำเร็จ','error');

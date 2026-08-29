@@ -97,9 +97,17 @@ def get_google_sheets_client():
     try:
         if SERVICE_ACCOUNT_JSON:
             creds_dict = json.loads(SERVICE_ACCOUNT_JSON)
+            # Fix private_key: replace literal \\n with actual newlines
+            # Vercel env vars may store \\n as literal backslash-n
+            if "private_key" in creds_dict:
+                pk = creds_dict["private_key"]
+                if "\\n" in pk and "\n" not in pk:
+                    pk = pk.replace("\\n", "\n")
+                    creds_dict["private_key"] = pk
         else:
             creds_file = os.path.join(os.path.dirname(__file__), "service_account.json")
             if not os.path.exists(creds_file):
+                print("SERVICE_ACCOUNT_JSON not set and no service_account.json found")
                 return None
             with open(creds_file) as f:
                 creds_dict = json.load(f)
@@ -113,7 +121,7 @@ def get_google_sheets_client():
         )
         return gspread.authorize(creds)
     except Exception as e:
-        print(f"Sheets connection error: {e}")
+        print(f"Sheets connection error: {type(e).__name__}: {e}")
         return None
 
 def get_or_create_worksheet(client, sheet_name, headers=None):
@@ -187,7 +195,8 @@ def register():
 
         client = get_google_sheets_client()
         if not client:
-            # Offline mode: create user locally
+            # Offline mode: create user locally (no Google Sheets)
+            print(f"[REGISTER] Google Sheets unavailable - offline mode for {username}")
             user_id = f"user_{secrets.token_hex(8)}"
             token = generate_token(user_id, role, display_name or username)
             return jsonify({
@@ -199,7 +208,8 @@ def register():
                     "displayName": display_name or username,
                     "role": role
                 },
-                "mode": "offline"
+                "mode": "offline",
+                "warning": "ข้อมูลไม่ได้บันทึกลง Google Sheets - ตรวจสอบ SERVICE_ACCOUNT_JSON ใน Vercel"
             })
 
         ws = get_or_create_worksheet(client, USERS_SHEET, [
@@ -269,6 +279,7 @@ def login():
         # Offline mode: when Google Sheets is not configured
         client = get_google_sheets_client()
         if not client:
+            print(f"[LOGIN] Google Sheets unavailable - offline mode for {username}")
             token = generate_token("offline_user", "admin", username)
             return jsonify({
                 "status": "ok",
@@ -279,11 +290,13 @@ def login():
                     "displayName": username,
                     "role": "admin"
                 },
-                "mode": "offline"
+                "mode": "offline",
+                "warning": "ไม่ได้เชื่อมต่อ Google Sheets - ตรวจสอบ SERVICE_ACCOUNT_JSON ใน Vercel"
             })
 
         ws = get_or_create_worksheet(client, USERS_SHEET)
         if not ws:
+            print(f"[LOGIN] Users sheet not found for {username}")
             token = generate_token("offline_user", "admin", username)
             return jsonify({
                 "status": "ok",
@@ -294,7 +307,8 @@ def login():
                     "displayName": username,
                     "role": "admin"
                 },
-                "mode": "offline"
+                "mode": "offline",
+                "warning": "Users sheet not found in Google Sheets"
             })
 
         password_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -369,11 +383,11 @@ def get_users():
     try:
         client = get_google_sheets_client()
         if not client:
-            return jsonify({"status": "ok", "users": [], "mode": "offline"})
+            return jsonify({"status": "ok", "users": [], "mode": "offline", "error": "Google Sheets client unavailable - check SERVICE_ACCOUNT_JSON"})
 
         ws = get_or_create_worksheet(client, USERS_SHEET)
         if not ws:
-            return jsonify({"status": "ok", "users": [], "mode": "offline"})
+            return jsonify({"status": "ok", "users": [], "mode": "offline", "error": "Users sheet not found - check GOOGLE_SHEETS_ID"})
 
         records = ws.get_all_records()
         users = []
@@ -581,6 +595,35 @@ def api_index():
         "version": "2.0.0 (Multi-User)",
         "timestamp": datetime.now().isoformat()
     })
+
+
+@app.route("/api/test-sheets", methods=["GET"])
+def test_sheets():
+    """Test Google Sheets connection"""
+    result = {
+        "has_sheets_id": bool(GOOGLE_SHEETS_ID),
+        "has_service_account": bool(SERVICE_ACCOUNT_JSON),
+        "sheets_id": GOOGLE_SHEETS_ID[:8] + "..." if GOOGLE_SHEETS_ID else "",
+        "client_ok": False,
+        "sheets": [],
+        "error": None
+    }
+    try:
+        client = get_google_sheets_client()
+        if not client:
+            result["error"] = "Cannot create Google Sheets client - check SERVICE_ACCOUNT_JSON env var"
+            return jsonify(result)
+        result["client_ok"] = True
+        if not GOOGLE_SHEETS_ID:
+            result["error"] = "GOOGLE_SHEETS_ID not set"
+            return jsonify(result)
+        spreadsheet = client.open_by_key(GOOGLE_SHEETS_ID)
+        result["spreadsheet_title"] = spreadsheet.title
+        result["sheets"] = [ws.title for ws in spreadsheet.worksheets()]
+        return jsonify(result)
+    except Exception as e:
+        result["error"] = f"{type(e).__name__}: {str(e)}"
+        return jsonify(result)
 
 
 @app.route("/api/inspections", methods=["GET"])
