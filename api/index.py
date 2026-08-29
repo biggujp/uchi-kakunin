@@ -142,6 +142,25 @@ def get_or_create_worksheet(client, sheet_name, headers=None):
         print(f"Worksheet error: {e}")
         return None
 
+def safe_get_all_records(ws):
+    """Get all records safely - handles empty sheets"""
+    try:
+        rows = ws.get_all_values()
+        if len(rows) < 2:
+            return []
+        headers = rows[0]
+        records = []
+        for row in rows[1:]:
+            record = {}
+            for i, h in enumerate(headers):
+                if h:
+                    record[h] = row[i] if i < len(row) else ""
+            records.append(record)
+        return records
+    except Exception:
+        return []
+
+
 def log_activity(user_id, action, details=""):
     """บันทึก activity log"""
     try:
@@ -233,7 +252,7 @@ def register():
 
         # Check duplicate
         try:
-            records = ws.get_all_records()
+            records = safe_get_all_records(ws)
         except Exception:
             records = []
         for r in records:
@@ -316,7 +335,7 @@ def login():
 
         password_hash = hashlib.sha256(password.encode()).hexdigest()
         try:
-            records = ws.get_all_records()
+            records = safe_get_all_records(ws)
         except Exception:
             records = []
 
@@ -396,7 +415,7 @@ def get_users():
             return jsonify({"status": "ok", "users": [], "mode": "offline", "error": "Users sheet not found - check GOOGLE_SHEETS_ID"})
 
         try:
-            records = ws.get_all_records()
+            records = safe_get_all_records(ws)
         except Exception:
             records = []
         users = []
@@ -433,7 +452,7 @@ def update_user(user_id):
         if not ws:
             return jsonify({"status": "ok", "message": "Offline mode"})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         for idx, r in enumerate(records, start=2):
             if r.get("UserID") == user_id:
                 if "role" in data:
@@ -464,7 +483,7 @@ def delete_user(user_id):
         if not ws:
             return jsonify({"status": "ok", "message": "Offline mode"})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         for idx, r in enumerate(records, start=2):
             if r.get("UserID") == user_id:
                 ws.update_cell(idx, 8, "false")  # Soft delete
@@ -516,7 +535,7 @@ def share_report():
             if share_with == "all":
                 users_ws = get_or_create_worksheet(client, USERS_SHEET)
                 if users_ws:
-                    for ur in users_ws.get_all_records():
+                    for ur in users_safe_get_all_records(ws):
                         if ur.get("Active") == "true" and ur.get("UserID") != request.user["user_id"]:
                             target_users.append(ur["UserID"])
             else:
@@ -555,7 +574,7 @@ def get_shared_with_me():
         if not ws:
             return jsonify({"shared": []})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         shared = []
 
         # Also get inspection data for context
@@ -563,7 +582,7 @@ def get_shared_with_me():
         inspection_map = {}
         if inspection_ws:
             try:
-                for ir in inspection_ws.get_all_records():
+                for ir in inspection_safe_get_all_records(ws):
                     if ir.get("Raw JSON"):
                         insp = json.loads(ir["Raw JSON"])
                         inspection_map[str(ir.get("InspectionID", insp.get("id", "")))] = insp
@@ -645,7 +664,7 @@ def get_inspections():
         if not ws:
             return jsonify({"error": "Cannot access spreadsheet", "inspections": []}), 200
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         user_id = request.user["user_id"]
         user_role = request.user["role"]
 
@@ -654,7 +673,7 @@ def get_inspections():
         try:
             share_ws = get_or_create_worksheet(client, SHARE_SHEET)
             if share_ws:
-                share_records = share_ws.get_all_records()
+                share_records = share_safe_get_all_records(ws)
                 for sr in share_records:
                     if sr.get("ShareWith") in [user_id, "all"]:
                         shared_ids.add(str(sr.get("InspectionID")))
@@ -749,7 +768,7 @@ def create_inspection():
         try:
             users_ws = get_or_create_worksheet(client, USERS_SHEET)
             if users_ws:
-                user_records = users_ws.get_all_records()
+                user_records = users_safe_get_all_records(ws)
                 for ur in user_records:
                     if ur.get("Role") == "admin" and ur.get("UserID") != request.user["user_id"] and ur.get("Active") == "true":
                         notif_id = f"notif_{secrets.token_hex(8)}"
@@ -788,7 +807,7 @@ def get_inspection(inspection_id):
         if not ws:
             return jsonify({"error": "Inspection not found"}), 404
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         for record in records:
             if str(record.get("ID")) == str(inspection_id):
                 if record.get("Raw JSON"):
@@ -817,7 +836,7 @@ def delete_inspection(inspection_id):
         if not ws:
             return jsonify({"status": "ok", "message": "Offline mode"})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         for idx, record in enumerate(records, start=2):
             if str(record.get("ID")) == str(inspection_id):
                 # Check permission
@@ -845,7 +864,7 @@ def get_stats():
         if not ws:
             return jsonify({"total_inspections": 0, "total_issues": 0})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         user_id = request.user["user_id"]
         user_role = request.user["role"]
 
@@ -885,7 +904,7 @@ def get_notifications():
         if not ws:
             return jsonify({"notifications": [], "unread": 0})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         user_id = request.user["user_id"]
         notifications = []
         unread = 0
@@ -961,7 +980,7 @@ def mark_all_read():
         if not ws:
             return jsonify({"status": "ok", "marked": 0, "mode": "offline"})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         user_id = request.user["user_id"]
         count = 0
         for idx, r in enumerate(records, start=2):
@@ -987,7 +1006,7 @@ def mark_notification_read(notif_id):
         if not ws:
             return jsonify({"status": "ok", "mode": "offline"})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         for idx, r in enumerate(records, start=2):
             if r.get("NotifID") == notif_id and r.get("UserID") == request.user["user_id"]:
                 ws.update_cell(idx, 7, "true")
@@ -1011,7 +1030,7 @@ def get_unread_count():
         if not ws:
             return jsonify({"unread": 0})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         unread = sum(1 for r in records if r.get("UserID") == request.user["user_id"] and r.get("Read") != "true")
 
         return jsonify({"status": "ok", "unread": unread})
@@ -1038,7 +1057,7 @@ def get_custom_items():
         if not ws:
             return jsonify({"customItems": {}})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         user_id = request.user["user_id"]
         items = {}
         for r in records:
@@ -1079,7 +1098,7 @@ def save_custom_items():
         user_id = request.user["user_id"]
 
         # Delete existing items for this user
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         rows_to_delete = []
         for idx, r in enumerate(records, start=2):
             if r.get("UserID") == user_id:
@@ -1117,7 +1136,7 @@ def delete_custom_item(item_id):
         if not ws:
             return jsonify({"status": "ok", "message": "Offline mode"})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         user_id = request.user["user_id"]
 
         for idx, r in enumerate(records, start=2):
@@ -1180,7 +1199,7 @@ def process_sync_queue():
         if not ws:
             return jsonify({"status": "ok", "processed": 0, "errors": 0, "mode": "offline"})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         user_id = request.user["user_id"]
         processed = 0
         errors = 0
@@ -1221,7 +1240,7 @@ def process_sync_queue():
                         ])
                         if custom_ws:
                             # Delete existing
-                            c_records = custom_ws.get_all_records()
+                            c_records = custom_safe_get_all_records(ws)
                             for ci, cr in enumerate(c_records, start=2):
                                 if cr.get("UserID") == user_id:
                                     custom_ws.delete_rows(ci)
@@ -1274,7 +1293,7 @@ def get_sync_queue():
         if not ws:
             return jsonify({"queue": []})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         user_id = request.user["user_id"]
         queue = []
         for r in records:
@@ -1353,7 +1372,7 @@ def update_team_session(session_id):
         if not ws:
             return jsonify({"status": "ok", "mode": "offline"})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         for idx, r in enumerate(records, start=2):
             if r.get("SessionID") == session_id:
                 # Update current data
@@ -1391,7 +1410,7 @@ def get_team_session(session_id):
         if not ws:
             return jsonify({"error": "Offline"}), 503
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         for r in records:
             if r.get("SessionID") == session_id:
                 current_data = {}
@@ -1440,7 +1459,7 @@ def join_team_session(session_id):
         if not ws:
             return jsonify({"status": "ok", "mode": "offline"})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         for idx, r in enumerate(records, start=2):
             if r.get("SessionID") == session_id:
                 members = []
@@ -1478,7 +1497,7 @@ def list_team_sessions():
         if not ws:
             return jsonify({"status": "ok", "sessions": [], "mode": "offline"})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         user_id = request.user["user_id"]
         user_role = request.user["role"]
 
@@ -1521,7 +1540,7 @@ def complete_team_session(session_id):
         if not ws:
             return jsonify({"status": "ok", "mode": "offline"})
 
-        records = ws.get_all_records()
+        records = safe_get_all_records(ws)
         for idx, r in enumerate(records, start=2):
             if r.get("SessionID") == session_id:
                 ws.update_cell(idx, 6, "completed")  # Status
