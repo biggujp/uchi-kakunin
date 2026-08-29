@@ -59,7 +59,7 @@ uchi-kakunin/
 
 ## 🚀 ติดตั้งและ Deploy (สรุปย่อ)
 
-ดูรายละเอียดทั้งหมดใน [INSTALLATION_GUIDE.md](./INSTALLATION_GUIDE.md)
+ดูรายละเอียดทั้งหมดใน [INSTALLATION_GUIDE.md](./INSTALLATION_GUIDE.md) (ไทย) | [GUIDE.md](./GUIDE.md) (English)
 
 ### 1. Google Sheets + Service Account
 1. สร้าง Google Spreadsheet ใหม่
