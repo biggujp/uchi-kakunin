@@ -599,24 +599,42 @@ def api_index():
 
 @app.route("/api/test-sheets", methods=["GET"])
 def test_sheets():
-    """Test Google Sheets connection"""
+    """Test Google Sheets connection with debug info"""
     result = {
         "has_sheets_id": bool(GOOGLE_SHEETS_ID),
         "has_service_account": bool(SERVICE_ACCOUNT_JSON),
-        "sheets_id": GOOGLE_SHEETS_ID[:8] + "..." if GOOGLE_SHEETS_ID else "",
+        "sheets_id_len": len(GOOGLE_SHEETS_ID),
+        "sa_len": len(SERVICE_ACCOUNT_JSON),
+        "sa_first_30": SERVICE_ACCOUNT_JSON[:30] if SERVICE_ACCOUNT_JSON else "",
         "client_ok": False,
         "sheets": [],
         "error": None
     }
     try:
+        if not SERVICE_ACCOUNT_JSON:
+            result["error"] = "SERVICE_ACCOUNT_JSON is empty - check Vercel env var (case-sensitive!)"
+            return jsonify(result)
+        if not GOOGLE_SHEETS_ID:
+            result["error"] = "GOOGLE_SHEETS_ID is empty - check Vercel env var"
+            return jsonify(result)
+
+        # Try parsing the JSON
+        try:
+            creds_dict = json.loads(SERVICE_ACCOUNT_JSON)
+            result["json_parse"] = True
+            result["has_private_key"] = "private_key" in creds_dict
+            result["client_email"] = creds_dict.get("client_email", "")
+        except json.JSONDecodeError as e:
+            result["error"] = f"SERVICE_ACCOUNT_JSON is not valid JSON: {str(e)}"
+            result["json_parse"] = False
+            return jsonify(result)
+
         client = get_google_sheets_client()
         if not client:
-            result["error"] = "Cannot create Google Sheets client - check SERVICE_ACCOUNT_JSON env var"
+            result["error"] = "Google Sheets client creation failed - check private_key format"
             return jsonify(result)
         result["client_ok"] = True
-        if not GOOGLE_SHEETS_ID:
-            result["error"] = "GOOGLE_SHEETS_ID not set"
-            return jsonify(result)
+
         spreadsheet = client.open_by_key(GOOGLE_SHEETS_ID)
         result["spreadsheet_title"] = spreadsheet.title
         result["sheets"] = [ws.title for ws in spreadsheet.worksheets()]
