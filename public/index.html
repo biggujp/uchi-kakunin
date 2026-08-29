@@ -2317,9 +2317,20 @@ async function testGoogleSheets() {
             </div>`;
         } else if (data.client_ok && data.sheets.length) {
             resultEl.innerHTML = `<div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
-                <p class="text-sm font-bold text-emerald-600 mb-1">✅ เชื่อมต่อสำเร็จ!</p>
-                <p class="text-xs text-emerald-700">Spreadsheet: ${data.spreadsheet_title || data.sheets_id}</p>
-                <p class="text-xs text-gray-500 mt-1">Sheets: ${data.sheets.join(', ')}</p>
+                <div class="flex items-center gap-2 mb-2">
+                    <div class="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center">
+                        <i class="fas fa-check text-white text-sm"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-bold text-emerald-600">✅ เชื่อมต่อ Google Sheets สำเร็จ!</p>
+                        <p class="text-[10px] text-emerald-500">ระบบบันทึกข้อมูลลง Google Sheet ปกติ</p>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg p-2 mt-2">
+                    <p class="text-[10px] font-semibold text-gray-500 mb-1">Spreadsheet: <span class="text-gray-700">${data.spreadsheet_title || data.sheets_id}</span></p>
+                    <p class="text-[10px] font-semibold text-gray-500">Sheets: <span class="text-gray-700">${data.sheets.join(', ')}</span></p>
+                    <p class="text-[10px] font-semibold text-gray-500">Sheets ทั้งหมด: <span class="text-emerald-600 font-bold">${data.sheets.length} ชีท</span></p>
+                </div>
             </div>`;
         } else if (data.client_ok && !data.sheets.length) {
             resultEl.innerHTML = `<div class="p-3 rounded-xl bg-amber-50 border border-amber-200">
@@ -2344,6 +2355,8 @@ function renderSyncStatus() {
     const onlineEl = document.getElementById('syncOnlineStatus');
     const queueEl = document.getElementById('syncQueueStatus');
     if (!onlineEl || !queueEl) return;
+    // Auto-check Google Sheets connection
+    testGoogleSheets();
 
     onlineEl.innerHTML = `
         <div class="flex items-center gap-3 p-3 rounded-xl bg-gray-50">
