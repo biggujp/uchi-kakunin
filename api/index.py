@@ -378,15 +378,18 @@ def get_users():
         records = ws.get_all_records()
         users = []
         for r in records:
-            if r.get("Active") == "true":
-                users.append({
-                    "id": r["UserID"],
-                    "username": r["Username"],
-                    "displayName": r.get("DisplayName", ""),
-                    "role": r.get("Role", "inspector"),
-                    "createdAt": r.get("CreatedAt", ""),
-                    "lastLogin": r.get("LastLogin", "")
-                })
+            uid = r.get("UserID", "")
+            if not uid:
+                continue
+            users.append({
+                "id": uid,
+                "username": r.get("Username", ""),
+                "displayName": r.get("DisplayName", ""),
+                "role": r.get("Role", "inspector"),
+                "active": r.get("Active", "true").lower() != "false",
+                "createdAt": r.get("CreatedAt", ""),
+                "lastLogin": r.get("LastLogin", "")
+            })
 
         return jsonify({"status": "ok", "users": users})
     except Exception as e:
@@ -531,14 +534,35 @@ def get_shared_with_me():
 
         records = ws.get_all_records()
         shared = []
+
+        # Also get inspection data for context
+        inspection_ws = get_or_create_worksheet(client, INSPECTION_SHEET)
+        inspection_map = {}
+        if inspection_ws:
+            try:
+                for ir in inspection_ws.get_all_records():
+                    if ir.get("Raw JSON"):
+                        insp = json.loads(ir["Raw JSON"])
+                        inspection_map[str(ir.get("InspectionID", insp.get("id", "")))] = insp
+            except:
+                pass
+
         for r in records:
             if r.get("ShareWith") in [request.user["user_id"], "all"]:
+                insp_id = r.get("InspectionID", "")
+                insp_data = inspection_map.get(str(insp_id), {})
                 shared.append({
                     "shareId": r.get("ShareID"),
-                    "inspectionId": r.get("InspectionID"),
+                    "inspectionId": insp_id,
                     "sharedBy": r.get("SharedBy"),
                     "permission": r.get("Permission"),
-                    "createdAt": r.get("CreatedAt")
+                    "createdAt": r.get("CreatedAt"),
+                    "ownerName": insp_data.get("ownerName", ""),
+                    "address": insp_data.get("address", ""),
+                    "date": insp_data.get("date", ""),
+                    "inspectorName": insp_data.get("inspectorName", ""),
+                    "isReinspection": insp_data.get("isReinspection", False),
+                    "summary": insp_data.get("summary", {})
                 })
 
         return jsonify({"status": "ok", "shared": shared})

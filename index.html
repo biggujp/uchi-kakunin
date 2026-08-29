@@ -469,7 +469,7 @@
             <h2 class="font-bold text-sm flex items-center gap-2"><i class="fas fa-share-nodes"></i> รายงานที่ถูกแชร์มาให้</h2>
         </div>
         <div id="sharedList" class="divide-y divide-gray-50 p-4">
-            <p class="text-sm text-gray-400 text-center py-4">ยังไม่มีรายงานที่ถูกแชร์</p>
+            <div class="text-center py-6"><div class="text-2xl mb-2">🔗</div><p class="text-sm text-gray-400">กำลังโหลด...</p></div>
         </div>
     </div>
 </div>
@@ -932,6 +932,7 @@ function switchPage(id) {
         if (submitBar) submitBar.style.display = id === 'inspect' ? 'block' : 'none';
     });
     if (id === 'settings') renderSyncStatus();
+    if (id === 'users') { loadUsers(); loadSharedReports(); }
     window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -2665,6 +2666,8 @@ function closeUserMenu() {
 // ===== USERS MANAGEMENT =====
 async function loadUsers() {
     if (!API_BASE || !authToken || !currentUser || currentUser.role !== 'admin') return;
+    const c = document.getElementById('usersList');
+    if (c) c.innerHTML = '<div class="text-center py-6"><div class="text-2xl mb-2">⏳</div><p class="text-sm text-gray-400">กำลังโหลดผู้ใช้...</p></div>';
     try {
         const res = await fetch(`${API_BASE}/users`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
@@ -2673,28 +2676,34 @@ async function loadUsers() {
         if (data.users) {
             allUsers = data.users;
             renderUsers();
+        } else if (data.error) {
+            if (c) c.innerHTML = `<div class="text-center py-6"><div class="text-2xl mb-2">⚠️</div><p class="text-sm text-red-400">${data.error}</p></div>`;
         }
-    } catch(e) {}
+    } catch(e) {
+        if (c) c.innerHTML = '<div class="text-center py-6"><div class="text-2xl mb-2">❌</div><p class="text-sm text-red-400">เชื่อมต่อ API ไม่ได้</p><p class="text-xs text-gray-300 mt-1">ตรวจสอบการตั้งค่า API_BASE ในหน้าตั้งค่า</p></div>';
+    }
 }
 
 function renderUsers() {
     const c = document.getElementById('usersList');
     if (!allUsers.length) {
-        c.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">ยังไม่มีผู้ใช้</p>';
+        c.innerHTML = '<div class="text-center py-8"><div class="text-3xl mb-2">👥</div><p class="text-sm text-gray-400">ยังไม่มีผู้ใช้ในระบบ</p><p class="text-xs text-gray-300 mt-1">กดปุ่ม + เพิ่มผู้ใช้ เพื่อเริ่มต้น</p></div>';
         return;
     }
     const roleBadge = { admin:'bg-rose-100 text-rose-600', inspector:'bg-brand-100 text-brand-600', viewer:'bg-gray-100 text-gray-600' };
     const roleLabels = { admin:'👨‍💼 Admin', inspector:'🔍 Inspector', viewer:'👁️ Viewer' };
     c.innerHTML = allUsers.map(u => {
         const isSelf = u.id === currentUser?.id;
+        const isInactive = u.active === false;
         return `
-        <div class="px-5 py-3 flex items-center gap-3 ${isSelf ? 'bg-brand-50/50' : ''}">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-br ${isSelf ? 'from-brand-400 to-brand-500' : 'from-violet-400 to-violet-500'} flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+        <div class="px-5 py-3 flex items-center gap-3 ${isSelf ? 'bg-brand-50/50' : ''} ${isInactive ? 'opacity-50' : ''}">
+            <div class="w-10 h-10 rounded-xl ${isInactive ? 'bg-gray-300' : (isSelf ? 'bg-gradient-to-br from-brand-400 to-brand-500' : 'bg-gradient-to-br from-violet-400 to-violet-500')} flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                 ${(u.displayName||'U').charAt(0).toUpperCase()}
             </div>
             <div class="flex-1 min-w-0">
-                <h4 class="text-sm font-bold text-gray-800 truncate">${u.displayName} ${isSelf ? '<span class="text-[10px] text-brand-500 font-normal">(คุณ)</span>' : ''}</h4>
+                <h4 class="text-sm font-bold ${isInactive ? 'text-gray-400 line-through' : 'text-gray-800'} truncate">${u.displayName || u.username} ${isSelf ? '<span class="text-[10px] text-brand-500 font-normal">(คุณ)</span>' : ''}</h4>
                 <p class="text-[11px] text-gray-400">@${u.username}</p>
+                ${isInactive ? '<p class="text-[10px] text-red-400 font-semibold">🚫 ปิดใช้งาน</p>' : ''}
             </div>
             <div class="flex items-center gap-2">
                 <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${roleBadge[u.role]||''}">${roleLabels[u.role]||u.role}</span>
@@ -2703,10 +2712,10 @@ function renderUsers() {
                     <button onclick="cycleUserRole('${u.id}','${u.role}')" class="w-7 h-7 rounded-lg bg-gray-100 text-gray-500 hover:bg-brand-100 hover:text-brand-600 flex items-center justify-center transition" title="เปลี่ยนบทบาท">
                         <i class="fas fa-pen text-[10px]"></i>
                     </button>
-                    <button onclick="toggleUserActive('${u.id}', ${u.active !== false})" class="w-7 h-7 rounded-lg ${u.active === false ? 'bg-red-100 text-red-500' : 'bg-emerald-100 text-emerald-500'} flex items-center justify-center transition" title="${u.active === false ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}">
-                        <i class="fas fa-${u.active === false ? 'ban' : 'check'} text-[10px]"></i>
+                    <button onclick="toggleUserActive('${u.id}', ${!isInactive})" class="w-7 h-7 rounded-lg ${isInactive ? 'bg-emerald-100 text-emerald-500' : 'bg-amber-100 text-amber-500'} flex items-center justify-center transition" title="${isInactive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}">
+                        <i class="fas fa-${isInactive ? 'check' : 'ban'} text-[10px]"></i>
                     </button>
-                    <button onclick="deleteUser('${u.id}','${u.displayName}')" class="w-7 h-7 rounded-lg bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-500 flex items-center justify-center transition" title="ลบผู้ใช้">
+                    <button onclick="deleteUser('${u.id}','${u.displayName||u.username}')" class="w-7 h-7 rounded-lg bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-500 flex items-center justify-center transition" title="ลบผู้ใช้">
                         <i class="fas fa-trash text-[10px]"></i>
                     </button>
                 </div>
@@ -2812,17 +2821,60 @@ function shareToAll() {
 }
 
 async function loadSharedReports() {
-    if (!API_BASE || !authToken) return;
+    const c = document.getElementById('sharedList');
+    if (!API_BASE || !authToken) {
+        c.innerHTML = '<div class="text-center py-6"><div class="text-2xl mb-2">🔗</div><p class="text-sm text-gray-400">เข้าสู่ระบบเพื่อดูรายงานที่ถูกแชร์</p></div>';
+        return;
+    }
     try {
         const res = await fetch(`${API_BASE}/share/shared-with-me`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
         const data = await res.json();
-        const c = document.getElementById('sharedList');
         if (data.shared?.length) {
-            c.innerHTML = data.shared.map(s => `<div class="py-2 text-sm text-gray-600"><i class="fas fa-share text-violet-400 mr-2"></i>Report ${s.inspectionId} (by ${s.sharedBy})</div>`).join('');
+            c.innerHTML = data.shared.map(s => `
+                <div class="py-3 px-1 border-b border-gray-50 last:border-0">
+                    <div class="flex items-start gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-share-nodes text-violet-500 text-sm"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-1">
+                                <h4 class="text-sm font-bold text-gray-800 truncate">${s.ownerName || 'รายงาน Inspection'}</h4>
+                                ${s.isReinspection ? '<span class="text-[9px] font-bold bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full">รอบ 2</span>' : '<span class="text-[9px] font-bold bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full">รอบ 1</span>'}
+                            </div>
+                            <p class="text-[11px] text-gray-400">${s.address || 'ไม่มีที่อยู่'} ${s.date ? '• ' + s.date : ''}</p>
+                            <div class="flex items-center gap-2 mt-1">
+                                <span class="text-[10px] text-gray-300">แชร์โดย: ${s.sharedBy || 'ไม่ระบุ'}</span>
+                                <span class="text-[10px] text-gray-300">•</span>
+                                <span class="text-[10px] text-gray-300">${s.permission === 'edit' ? 'แก้ไขได้' : 'ดูได้อย่างเดียว'}</span>
+                                ${s.createdAt ? `<span class="text-[10px] text-gray-300">• ${s.createdAt.split('T')[0]}</span>` : ''}
+                            </div>
+                        </div>
+                        <button onclick="viewSharedReport('${s.inspectionId}')" class="px-3 py-1.5 bg-violet-50 text-violet-600 text-[11px] font-semibold rounded-lg hover:bg-violet-100 transition flex-shrink-0">
+                            <i class="fas fa-eye mr-1"></i>ดู
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            c.innerHTML = '<div class="text-center py-6"><div class="text-2xl mb-2">📭</div><p class="text-sm text-gray-400">ยังไม่มีรายงานที่ถูกแชร์มาให้</p><p class="text-xs text-gray-300 mt-1">รายงานจะปรากฏที่นี่เมื่อมีคนแชร์ให้คุณ</p></div>';
         }
-    } catch(e) {}
+    } catch(e) {
+        c.innerHTML = '<div class="text-center py-6"><div class="text-2xl mb-2">⚠️</div><p class="text-sm text-gray-400">เกิดข้อผิดพลาดในการโหลดข้อมูล</p></div>';
+    }
+}
+
+function viewSharedReport(inspectionId) {
+    // Try to find in local inspections first
+    const local = inspections.find(i => String(i.id) === String(inspectionId));
+    if (local) {
+        currentInspection = local;
+        generateReport();
+        switchPage('report');
+        return;
+    }
+    showToast('ไม่พบรายงานในเครื่อง - รอการซิงค์จากเซิร์ฟเวอร์','error');
 }
 
 // ===== OFFLINE / SYNC QUEUE =====
