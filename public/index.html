@@ -123,6 +123,30 @@
     </div>
 </div>
 
+<!-- ===== JOIN TEAM SESSION MODAL ===== -->
+<div id="joinTeamModal" class="fixed inset-0 z-[200] bg-black/50 flex items-end sm:items-center justify-center hidden">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md p-6 anim-slide-up">
+        <div class="text-center mb-4">
+            <div class="w-12 h-12 mx-auto bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center text-white text-xl shadow-lg mb-2">
+                <i class="fas fa-users"></i>
+            </div>
+            <h2 class="text-lg font-bold text-gray-800">เข้าร่วมทีมตรวจ</h2>
+            <p class="text-xs text-gray-400 mt-1">กรอกรหัสทีมที่ต้องการเข้าร่วม</p>
+        </div>
+        <div class="space-y-3">
+            <input type="text" id="joinSessionInput" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 focus:border-violet-400 outline-none text-sm font-mono" placeholder="team_xxxxxxxxxxxx">
+            <div class="flex gap-2">
+                <button onclick="confirmJoinSession()" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white font-bold text-sm shadow-lg active:scale-[0.98] transition">
+                    <i class="fas fa-sign-in-alt mr-1"></i> เข้าร่วม
+                </button>
+                <button onclick="closeJoinTeamModal()" class="py-3 px-5 rounded-xl bg-gray-100 text-gray-500 font-semibold text-sm active:scale-[0.98] transition">
+                    ยกเลิก
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ===== ADD ITEM MODAL ===== -->
 <div id="addItemModal" class="fixed inset-0 z-[200] bg-black/50 flex items-end sm:items-center justify-center hidden">
     <div class="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md p-6 anim-slide-up">
@@ -304,6 +328,29 @@
                         </button>
                     </div>
                     <div id="teamMembersList" class="flex flex-wrap gap-1.5 mt-2"></div>
+                </div>
+            </div>
+
+            <!-- Team Sync Status Bar -->
+            <div id="teamSyncBar" class="hidden bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-xl p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+                        <span class="text-[11px] font-bold text-violet-700" id="teamSyncStatus">🔄 กำลังซิงค์...</span>
+                    </div>
+                    <span class="text-[10px] text-violet-400" id="teamSyncTime"></span>
+                </div>
+                <div id="teamOnlineMembers" class="flex flex-wrap gap-1"></div>
+                <div class="mt-2 flex gap-2">
+                    <button onclick="createTeamSession()" id="btnCreateTeam" class="flex-1 py-2 rounded-lg bg-violet-500 text-white text-[11px] font-bold hover:bg-violet-600 transition">
+                        <i class="fas fa-play mr-1"></i> เริ่มซิงค์ทีม
+                    </button>
+                    <button onclick="joinTeamSession()" id="btnJoinTeam" class="flex-1 py-2 rounded-lg bg-emerald-500 text-white text-[11px] font-bold hover:bg-emerald-600 transition">
+                        <i class="fas fa-sign-in-alt mr-1"></i> เข้าร่วมซิงค์
+                    </button>
+                    <button onclick="leaveTeamSession()" id="btnLeaveTeam" class="hidden py-2 px-3 rounded-lg bg-rose-100 text-rose-600 text-[11px] font-bold hover:bg-rose-200 transition">
+                        <i class="fas fa-sign-out-alt mr-1"></i> ออก
+                    </button>
                 </div>
             </div>
 
@@ -583,6 +630,8 @@ document.addEventListener('DOMContentLoaded', () => {
     ['ownerName', 'address'].forEach(id => {
         document.getElementById(id).addEventListener('input', updateChecklistVisibility);
     });
+    // Restore team session if exists
+    restoreTeamSession();
 });
 
 function updateChecklistVisibility() {
@@ -595,13 +644,6 @@ function updateChecklistVisibility() {
 
 // ===== TEAM MODE =====
 let teamMembers = [];
-
-function toggleTeamMode() {
-    const enabled = document.getElementById('teamMode').checked;
-    document.getElementById('teamMembersSection').classList.toggle('hidden', !enabled);
-    if (!enabled) teamMembers = [];
-    renderTeamMembers();
-}
 
 function addTeamMember() {
     const input = document.getElementById('teamMemberInput');
@@ -626,6 +668,230 @@ function renderTeamMembers() {
             <button onclick="removeTeamMember(${i})" class="text-amber-400 hover:text-amber-600 ml-0.5"><i class="fas fa-xmark text-[9px]"></i></button>
         </span>
     `).join('');
+}
+
+// ===== TEAM REAL-TIME SYNC =====
+let activeTeamSession = null;  // { sessionId, role:'owner'|'member' }
+let teamPollInterval = null;
+let teamSessionData = {};  // Current merged data from all members
+
+function toggleTeamMode() {
+    const enabled = document.getElementById('teamMode').checked;
+    document.getElementById('teamMembersSection').classList.toggle('hidden', !enabled);
+    document.getElementById('teamSyncBar').classList.toggle('hidden', !enabled);
+    if (!enabled) {
+        teamMembers = [];
+        leaveTeamSession();
+    }
+    renderTeamMembers();
+    updateTeamSyncButtons();
+}
+
+function updateTeamSyncButtons() {
+    const hasSession = !!activeTeamSession;
+    document.getElementById('btnCreateTeam').classList.toggle('hidden', hasSession);
+    document.getElementById('btnJoinTeam').classList.toggle('hidden', hasSession);
+    document.getElementById('btnLeaveTeam').classList.toggle('hidden', !hasSession);
+    if (hasSession) {
+        document.getElementById('teamSyncStatus').textContent = '🟢 เชื่อมต่อแล้ว';
+    }
+}
+
+async function createTeamSession() {
+    if (!currentUser || !authToken) {
+        showToast('กรุณาเข้าสู่ระบบก่อนใช้โหมดทีม', 'error');
+        return;
+    }
+    const owner = document.getElementById('ownerName').value.trim();
+    const addr = document.getElementById('address').value.trim();
+    if (!owner || !addr) {
+        showToast('กรุณากรอกชื่อเจ้าของบ้านและที่อยู่ก่อน', 'error');
+        return;
+    }
+    if (!API_BASE) {
+        showToast('กรุณาตั้งค่า API URL ก่อน', 'error');
+        return;
+    }
+    try {
+        const res = await fetch(`${API_BASE}/team-sessions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+            body: JSON.stringify({
+                ownerName: owner,
+                address: addr,
+                members: [{ userId: currentUser.id, displayName: currentUser.displayName }],
+                initialData: inspectionData,
+                housePhotos: []  // Photos are too large for API polling
+            })
+        });
+        const data = await res.json();
+        if (data.sessionId) {
+            activeTeamSession = { sessionId: data.sessionId, role: 'owner' };
+            localStorage.setItem('teamSession', JSON.stringify(activeTeamSession));
+            updateTeamSyncButtons();
+            startTeamPoll();
+            showToast('สร้างทีมสำเร็จ! รหัส: ' + data.sessionId, 'success');
+            document.getElementById('teamSyncStatus').textContent = '🟢 เชื่อมต่อแล้ว';
+        } else {
+            showToast(data.error || 'ไม่สามารถสร้างทีมได้', 'error');
+        }
+    } catch(e) {
+        showToast('ไม่สามารถเชื่อมต่อ API', 'error');
+    }
+}
+
+function joinTeamSession() {
+    document.getElementById('joinTeamModal').classList.remove('hidden');
+    document.getElementById('joinSessionInput').focus();
+}
+
+function closeJoinTeamModal() {
+    document.getElementById('joinTeamModal').classList.add('hidden');
+}
+
+async function confirmJoinSession() {
+    const sessionId = document.getElementById('joinSessionInput').value.trim();
+    if (!sessionId) {
+        showToast('กรุณากรอกรหัสทีม', 'error');
+        return;
+    }
+    if (!currentUser || !authToken) {
+        showToast('กรุณาเข้าสู่ระบบก่อน', 'error');
+        return;
+    }
+    try {
+        // First, get the session data
+        const getRes = await fetch(`${API_BASE}/team-sessions/${sessionId}`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const getData = await getRes.json();
+        if (!getData.session) {
+            showToast('ไม่พบรหัสทีมนี้', 'error');
+            return;
+        }
+        // Join the session
+        const joinRes = await fetch(`${API_BASE}/team-sessions/${sessionId}/join`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }
+        });
+        const joinData = await joinRes.json();
+
+        activeTeamSession = { sessionId: sessionId, role: 'member' };
+        localStorage.setItem('teamSession', JSON.stringify(activeTeamSession));
+
+        // Merge owner's data into local
+        mergeTeamData(getData.session);
+
+        updateTeamSyncButtons();
+        startTeamPoll();
+        closeJoinTeamModal();
+        showToast('เข้าร่วมทีมสำเร็จ!', 'success');
+        document.getElementById('teamSyncStatus').textContent = '🟢 เชื่อมต่อแล้ว';
+    } catch(e) {
+        showToast('ไม่สามารถเข้าร่วมทีมได้', 'error');
+    }
+}
+
+function mergeTeamData(session) {
+    // Merge currentData from session into local inspectionData
+    const remoteData = session.currentData || {};
+    let hasChanges = false;
+    for (const [itemId, remoteItem] of Object.entries(remoteData)) {
+        if (!inspectionData[itemId]) {
+            inspectionData[itemId] = remoteItem;
+            hasChanges = true;
+        } else if (remoteItem.status && inspectionData[itemId].status !== remoteItem.status) {
+            // Remote has a different status - only merge if remote is newer
+            inspectionData[itemId] = remoteItem;
+            hasChanges = true;
+        }
+    }
+    // Update property info from remote if we don't have it
+    if (session.ownerName && !document.getElementById('ownerName').value.trim()) {
+        document.getElementById('ownerName').value = session.ownerName;
+        hasChanges = true;
+    }
+    if (session.address && !document.getElementById('address').value.trim()) {
+        document.getElementById('address').value = session.address;
+        hasChanges = true;
+    }
+    if (hasChanges) {
+        updateChecklistVisibility();
+        renderChecklist();
+        showToast('📥 ได้รับข้อมูลจากทีม', '');
+    }
+    // Update online members display
+    renderOnlineMembers(session.members || []);
+}
+
+function renderOnlineMembers(members) {
+    const c = document.getElementById('teamOnlineMembers');
+    if (!c) return;
+    c.innerHTML = members.map(m => `
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 text-[10px] font-semibold">
+            <i class="fas fa-user text-[8px]"></i> ${m.displayName || m.userId}
+        </span>
+    `).join('');
+}
+
+function startTeamPoll() {
+    if (teamPollInterval) clearInterval(teamPollInterval);
+    teamPollInterval = setInterval(async () => {
+        if (!activeTeamSession || !API_BASE || !authToken) return;
+        try {
+            // Update our data to the server
+            const updateData = {
+                currentData: JSON.parse(JSON.stringify(inspectionData)),
+                ownerName: document.getElementById('ownerName').value.trim(),
+                address: document.getElementById('address').value.trim(),
+                members: [{ userId: currentUser?.id || '', displayName: currentUser?.displayName || '' }, ...teamMembers.map(n => ({ userId: '', displayName: n }))]
+            };
+            await fetch(`${API_BASE}/team-sessions/${activeTeamSession.sessionId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                body: JSON.stringify(updateData)
+            });
+
+            // Get latest data from server
+            const getRes = await fetch(`${API_BASE}/team-sessions/${activeTeamSession.sessionId}`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const getData = await getRes.json();
+            if (getData.session) {
+                mergeTeamData(getData.session);
+                const now = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                document.getElementById('teamSyncTime').textContent = '🔄 ' + now;
+            }
+        } catch(e) {
+            document.getElementById('teamSyncStatus').textContent = '🔴 ขาดการเชื่อมต่อ';
+        }
+    }, 5000);  // Poll every 5 seconds
+}
+
+function stopTeamPoll() {
+    if (teamPollInterval) { clearInterval(teamPollInterval); teamPollInterval = null; }
+}
+
+function leaveTeamSession() {
+    activeTeamSession = null;
+    localStorage.removeItem('teamSession');
+    stopTeamPoll();
+    updateTeamSyncButtons();
+    document.getElementById('teamSyncStatus').textContent = '🔄 ยังไม่ได้เชื่อมต่อ';
+    document.getElementById('teamOnlineMembers').innerHTML = '';
+    document.getElementById('teamSyncTime').textContent = '';
+}
+
+// Restore team session on page load
+function restoreTeamSession() {
+    const saved = localStorage.getItem('teamSession');
+    if (saved) {
+        try {
+            activeTeamSession = JSON.parse(saved);
+            updateTeamSyncButtons();
+            startTeamPoll();
+        } catch(e) {}
+    }
 }
 
 // Re-show submit bar when page regains focus (after camera capture)
@@ -1293,6 +1559,7 @@ async function _submitInspectionInner() {
             inspectorName: document.getElementById('inspectorName').value,
             teamMode: isTeamMode,
             teamMembers: isTeamMode ? [document.getElementById('inspectorName').value || currentUser?.displayName || '', ...teamMembers] : [],
+            teamSessionId: isTeamMode && activeTeamSession ? activeTeamSession.sessionId : null,
             housePhotos: [...housePhotos],
             data: JSON.parse(JSON.stringify(inspectionData)),
             timestamp: now

@@ -1219,6 +1219,274 @@ def get_sync_queue():
         return jsonify({"error": str(e)}), 500
 
 
+# ===== TEAM SESSION (Real-time Collaboration) =====
+
+TEAM_SESSION_SHEET = "TeamSessions"
+
+@app.route("/api/team-sessions", methods=["POST"])
+@require_auth
+def create_team_session():
+    """สร้าง team session ใหม่ สำหรับการตรวจร่วม"""
+    try:
+        data = request.get_json()
+        session_id = f"team_{secrets.token_hex(8)}"
+        owner_name = data.get("ownerName", "")
+        address = data.get("address", "")
+        members = data.get("members", [])  # [{userId, displayName}]
+
+        client = get_google_sheets_client()
+        if not client:
+            return jsonify({"status": "ok", "sessionId": session_id, "mode": "offline"})
+
+        ws = get_or_create_worksheet(client, TEAM_SESSION_SHEET, [
+            "SessionID", "OwnerUserID", "OwnerName", "Address",
+            "Members", "Status", "CurrentData", "LastUpdate",
+            "CreatedAt", "HousePhotos"
+        ])
+        if not ws:
+            return jsonify({"status": "ok", "sessionId": session_id, "mode": "offline"})
+
+        ws.append_row([
+            session_id,
+            request.user["user_id"],
+            owner_name,
+            address,
+            json.dumps(members, ensure_ascii=False),
+            "active",
+            json.dumps(data.get("initialData", {}), ensure_ascii=False),
+            datetime.now().isoformat(),
+            datetime.now().isoformat(),
+            json.dumps(data.get("housePhotos", []), ensure_ascii=False)
+        ], value_input_option="USER_ENTERED")
+
+        log_activity(request.user["user_id"], "create_team_session", f"Session {session_id}")
+        return jsonify({"status": "ok", "sessionId": session_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/team-sessions/<session_id>", methods=["PUT"])
+@require_auth
+def update_team_session(session_id):
+    """อัปเดตข้อมูล team session (polled by team members)"""
+    try:
+        data = request.get_json()
+
+        client = get_google_sheets_client()
+        if not client:
+            return jsonify({"status": "ok", "mode": "offline"})
+
+        ws = get_or_create_worksheet(client, TEAM_SESSION_SHEET)
+        if not ws:
+            return jsonify({"status": "ok", "mode": "offline"})
+
+        records = ws.get_all_records()
+        for idx, r in enumerate(records, start=2):
+            if r.get("SessionID") == session_id:
+                # Update current data
+                if "currentData" in data:
+                    ws.update_cell(idx, 7, json.dumps(data["currentData"], ensure_ascii=False))
+                if "housePhotos" in data:
+                    ws.update_cell(idx, 10, json.dumps(data["housePhotos"], ensure_ascii=False))
+                # Update property info
+                if "ownerName" in data:
+                    ws.update_cell(idx, 3, data["ownerName"])
+                if "address" in data:
+                    ws.update_cell(idx, 4, data["address"])
+                if "members" in data:
+                    ws.update_cell(idx, 5, json.dumps(data["members"], ensure_ascii=False))
+                # Always update timestamp
+                ws.update_cell(idx, 8, datetime.now().isoformat())
+
+                return jsonify({"status": "ok"})
+
+        return jsonify({"error": "Session not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/team-sessions/<session_id>", methods=["GET"])
+@require_auth
+def get_team_session(session_id):
+    """ดึงข้อมูล team session ล่าสุด (polling)"""
+    try:
+        client = get_google_sheets_client()
+        if not client:
+            return jsonify({"error": "Offline"}), 503
+
+        ws = get_or_create_worksheet(client, TEAM_SESSION_SHEET)
+        if not ws:
+            return jsonify({"error": "Offline"}), 503
+
+        records = ws.get_all_records()
+        for r in records:
+            if r.get("SessionID") == session_id:
+                current_data = {}
+                house_photos = []
+                try:
+                    current_data = json.loads(r.get("CurrentData", "{}"))
+                except: pass
+                try:
+                    house_photos = json.loads(r.get("HousePhotos", "[]"))
+                except: pass
+                members = []
+                try:
+                    members = json.loads(r.get("Members", "[]"))
+                except: pass
+
+                return jsonify({
+                    "status": "ok",
+                    "session": {
+                        "sessionId": r.get("SessionID"),
+                        "ownerUserId": r.get("OwnerUserID"),
+                        "ownerName": r.get("OwnerName"),
+                        "address": r.get("Address"),
+                        "members": members,
+                        "sessionStatus": r.get("Status"),
+                        "currentData": current_data,
+                        "lastUpdate": r.get("LastUpdate"),
+                        "housePhotos": house_photos
+                    }
+                })
+
+        return jsonify({"error": "Session not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/team-sessions/<session_id>/join", methods=["POST"])
+@require_auth
+def join_team_session(session_id):
+    """เข้าร่วม team session"""
+    try:
+        client = get_google_sheets_client()
+        if not client:
+            return jsonify({"status": "ok", "mode": "offline"})
+
+        ws = get_or_create_worksheet(client, TEAM_SESSION_SHEET)
+        if not ws:
+            return jsonify({"status": "ok", "mode": "offline"})
+
+        records = ws.get_all_records()
+        for idx, r in enumerate(records, start=2):
+            if r.get("SessionID") == session_id:
+                members = []
+                try:
+                    members = json.loads(r.get("Members", "[]"))
+                except: pass
+
+                user_id = request.user["user_id"]
+                display_name = request.user.get("displayName", user_id)
+
+                # Check if already in team
+                already = any(m.get("userId") == user_id for m in members)
+                if not already:
+                    members.append({"userId": user_id, "displayName": display_name})
+                    ws.update_cell(idx, 5, json.dumps(members, ensure_ascii=False))
+                    ws.update_cell(idx, 8, datetime.now().isoformat())
+
+                return jsonify({"status": "ok", "message": "Joined team"})
+
+        return jsonify({"error": "Session not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/team-sessions", methods=["GET"])
+@require_auth
+def list_team_sessions():
+    """ดึง team sessions ทั้งหมดที่ user เป็นสมาชิก"""
+    try:
+        client = get_google_sheets_client()
+        if not client:
+            return jsonify({"status": "ok", "sessions": [], "mode": "offline"})
+
+        ws = get_or_create_worksheet(client, TEAM_SESSION_SHEET)
+        if not ws:
+            return jsonify({"status": "ok", "sessions": [], "mode": "offline"})
+
+        records = ws.get_all_records()
+        user_id = request.user["user_id"]
+        user_role = request.user["role"]
+
+        sessions = []
+        for r in records:
+            if r.get("Status") == "active":
+                members = []
+                try:
+                    members = json.loads(r.get("Members", "[]"))
+                except: pass
+                is_member = (r.get("OwnerUserID") == user_id or
+                            any(m.get("userId") == user_id for m in members))
+                if is_member or user_role == "admin":
+                    sessions.append({
+                        "sessionId": r.get("SessionID"),
+                        "ownerName": r.get("OwnerName"),
+                        "address": r.get("Address"),
+                        "members": members,
+                        "lastUpdate": r.get("LastUpdate"),
+                        "createdAt": r.get("CreatedAt")
+                    })
+
+        return jsonify({"status": "ok", "sessions": sessions})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/team-sessions/<session_id>/complete", methods=["POST"])
+@require_auth
+def complete_team_session(session_id):
+    """ปิด team session และบันทึกเป็น inspection"""
+    try:
+        data = request.get_json() or {}
+
+        client = get_google_sheets_client()
+        if not client:
+            return jsonify({"status": "ok", "mode": "offline"})
+
+        ws = get_or_create_worksheet(client, TEAM_SESSION_SHEET)
+        if not ws:
+            return jsonify({"status": "ok", "mode": "offline"})
+
+        records = ws.get_all_records()
+        for idx, r in enumerate(records, start=2):
+            if r.get("SessionID") == session_id:
+                ws.update_cell(idx, 6, "completed")  # Status
+                ws.update_cell(idx, 8, datetime.now().isoformat())
+
+                # Save as inspection
+                inspection_data = data.get("inspection", {})
+                if inspection_data:
+                    insp_ws = get_or_create_worksheet(client, INSPECTION_SHEET, [
+                        "ID", "วันที่ตรวจ", "ชื่อเจ้าของ", "ที่อยู่", "ประเภทบ้าน",
+                        "ชื่อผู้ตรวจ", "คะแนนรวม", "รายการผ่าน", "รายการปัญหา",
+                        "รายละเอียดปัญหา", "Timestamp", "UserID", "Raw JSON"
+                    ])
+                    if insp_ws:
+                        check = inspection_data.get("data", {})
+                        pass_c = sum(1 for v in check.values() if v.get("status") == "pass")
+                        fail_c = sum(1 for v in check.values() if v.get("status") == "fail")
+                        insp_ws.append_row([
+                            inspection_data.get("id", str(int(datetime.now().timestamp() * 1000))),
+                            inspection_data.get("date", ""),
+                            inspection_data.get("ownerName", r.get("OwnerName", "")),
+                            inspection_data.get("address", r.get("Address", "")),
+                            inspection_data.get("houseType", ""),
+                            inspection_data.get("inspectorName", ""),
+                            f"{pass_c}/{pass_c+fail_c}", pass_c, fail_c, "",
+                            datetime.now().isoformat(),
+                            request.user["user_id"],
+                            json.dumps(inspection_data, ensure_ascii=False)
+                        ], value_input_option="USER_ENTERED")
+
+                log_activity(request.user["user_id"], "complete_team_session", f"Session {session_id}")
+                return jsonify({"status": "ok"})
+
+        return jsonify({"error": "Session not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ===== HELPERS =====
 
 def save_local_backup(data):
