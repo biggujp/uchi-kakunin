@@ -694,8 +694,9 @@ function renderTeamUserPicker() {
         const selected = teamMembers.find(m => m.userId === u.id);
         const colorIdx = selected ? (selected.color ?? 0) : teamMembers.length % TEAM_COLORS.length;
         const color = TEAM_COLORS[colorIdx % TEAM_COLORS.length];
+        const displayName = (u.displayName || u.username || '').replace(/'/g, "\\'");
         return `
-        <button onclick="toggleTeamMember('${u.id}','${(u.displayName||u.username).replace(/'/g,\"\\'\")}')" class="w-full flex items-center gap-2.5 p-2 rounded-xl border-2 transition ${selected ? color.light + ' ' + color.border + ' border-2' : 'border-gray-100 hover:border-gray-200 bg-white'}">
+        <button data-uid="${u.id}" data-name="${displayName}" onclick="toggleTeamMember(this.dataset.uid, this.dataset.name)" class="w-full flex items-center gap-2.5 p-2 rounded-xl border-2 transition ${selected ? color.light + ' ' + color.border + ' border-2' : 'border-gray-100 hover:border-gray-200 bg-white'}">
             <div class="w-8 h-8 rounded-lg ${selected ? color.bg : 'bg-gray-200'} flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                 ${(u.displayName||u.username||'U').charAt(0).toUpperCase()}
             </div>
@@ -717,11 +718,12 @@ function renderTeamMembers() {
     }
     c.innerHTML = teamMembers.map((m, i) => {
         const color = TEAM_COLORS[m.color ?? i % TEAM_COLORS.length];
+        const teamDisplayName = (m.displayName || '').replace(/'/g, "\\'");
         return `
         <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full ${color.light} ${color.text} text-[11px] font-semibold">
             <div class="w-2.5 h-2.5 rounded-full ${color.bg}"></div>
             ${m.displayName || m.userId}
-            <button onclick="toggleTeamMember('${m.userId}','${(m.displayName||'').replace(/'/g,\"\\'\")}')" class="${color.text} opacity-50 hover:opacity-100 ml-0.5"><i class="fas fa-xmark text-[9px]"></i></button>
+            <button data-uid="${m.userId}" data-name="${teamDisplayName}" onclick="toggleTeamMember(this.dataset.uid, this.dataset.name)" class="${color.text} opacity-50 hover:opacity-100 ml-0.5"><i class="fas fa-xmark text-[9px]"></i></button>
         </span>`;
     }).join('');
 }
