@@ -2144,11 +2144,18 @@ function checkAuth() {
 
 function showAuthModal() {
     document.getElementById('authModal').classList.remove('hidden');
+    const submitBar = document.getElementById('submitBar');
+    if (submitBar) submitBar.style.display = 'none';
     showLogin();
 }
 
 function closeAuthModal() {
     document.getElementById('authModal').classList.add('hidden');
+    const submitBar = document.getElementById('submitBar');
+    const inspectPage = document.getElementById('pg-inspect');
+    if (submitBar && inspectPage && !inspectPage.classList.contains('hidden')) {
+        submitBar.style.display = 'block';
+    }
 }
 
 function showLogin() {
