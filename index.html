@@ -320,13 +320,8 @@
                     </div>
                 </label>
                 <div id="teamMembersSection" class="hidden mt-3 pt-3 border-t border-amber-200">
-                    <label class="text-[11px] font-semibold text-amber-700 mb-1 block">เพิ่มผู้ตรวจในทีม</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="teamMemberInput" class="flex-1 px-3 py-1.5 rounded-lg border border-amber-200 focus:border-amber-400 outline-none text-xs" placeholder="กรอกชื่อผู้ตรวจ">
-                        <button onclick="addTeamMember()" class="px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-bold hover:bg-amber-600 transition">
-                            <i class="fas fa-plus"></i>
-                        </button>
-                    </div>
+                    <label class="text-[11px] font-semibold text-amber-700 mb-1 block">เลือกผู้ตรวจในทีม</label>
+                    <div id="teamUserPicker" class="space-y-1.5 max-h-40 overflow-y-auto"></div>
                     <div id="teamMembersList" class="flex flex-wrap gap-1.5 mt-2"></div>
                 </div>
             </div>
@@ -655,31 +650,80 @@ function updateChecklistVisibility() {
 }
 
 // ===== TEAM MODE =====
-let teamMembers = [];
+let teamMembers = [];  // Array of { userId, displayName, color }
+const TEAM_COLORS = [
+    { bg: 'bg-blue-500', border: 'border-blue-500', text: 'text-blue-600', light: 'bg-blue-50', hex: '#3b82f6' },
+    { bg: 'bg-emerald-500', border: 'border-emerald-500', text: 'text-emerald-600', light: 'bg-emerald-50', hex: '#10b981' },
+    { bg: 'bg-purple-500', border: 'border-purple-500', text: 'text-purple-600', light: 'bg-purple-50', hex: '#a855f7' },
+    { bg: 'bg-orange-500', border: 'border-orange-500', text: 'text-orange-600', light: 'bg-orange-50', hex: '#f97316' },
+    { bg: 'bg-pink-500', border: 'border-pink-500', text: 'text-pink-600', light: 'bg-pink-50', hex: '#ec4899' },
+    { bg: 'bg-cyan-500', border: 'border-cyan-500', text: 'text-cyan-600', light: 'bg-cyan-50', hex: '#06b6d4' },
+    { bg: 'bg-amber-500', border: 'border-amber-500', text: 'text-amber-600', light: 'bg-amber-50', hex: '#f59e0b' },
+    { bg: 'bg-rose-500', border: 'border-rose-500', text: 'text-rose-600', light: 'bg-rose-50', hex: '#f43f5e' }
+];
 
-function addTeamMember() {
-    const input = document.getElementById('teamMemberInput');
-    const name = input.value.trim();
-    if (!name) return;
-    if (teamMembers.includes(name)) { showToast('ชื่อนี้มีในทีมแล้ว','error'); return; }
-    teamMembers.push(name);
-    input.value = '';
+function getMemberColor(userId) {
+    const idx = teamMembers.findIndex(m => m.userId === userId);
+    return TEAM_COLORS[idx >= 0 ? idx % TEAM_COLORS.length : 0];
+}
+
+function getMemberColorByIndex(idx) {
+    return TEAM_COLORS[idx % TEAM_COLORS.length];
+}
+
+function toggleTeamMember(userId, displayName) {
+    const idx = teamMembers.findIndex(m => m.userId === userId);
+    if (idx >= 0) {
+        teamMembers.splice(idx, 1);
+    } else {
+        const colorIdx = teamMembers.length % TEAM_COLORS.length;
+        teamMembers.push({ userId, displayName, color: colorIdx });
+    }
+    renderTeamUserPicker();
     renderTeamMembers();
 }
 
-function removeTeamMember(idx) {
-    teamMembers.splice(idx, 1);
-    renderTeamMembers();
+function renderTeamUserPicker() {
+    const c = document.getElementById('teamUserPicker');
+    if (!c) return;
+    if (!allUsers.length) {
+        c.innerHTML = '<p class="text-[11px] text-gray-400 py-2">ไม่มีผู้ใช้ในระบบ - กรุณาเข้าสู่ระบบก่อน</p>';
+        return;
+    }
+    c.innerHTML = allUsers.filter(u => u.active !== false).map(u => {
+        const selected = teamMembers.find(m => m.userId === u.id);
+        const colorIdx = selected ? (selected.color ?? 0) : teamMembers.length % TEAM_COLORS.length;
+        const color = TEAM_COLORS[colorIdx % TEAM_COLORS.length];
+        return `
+        <button onclick="toggleTeamMember('${u.id}','${(u.displayName||u.username).replace(/'/g,\"\\'\")}')" class="w-full flex items-center gap-2.5 p-2 rounded-xl border-2 transition ${selected ? color.light + ' ' + color.border + ' border-2' : 'border-gray-100 hover:border-gray-200 bg-white'}">
+            <div class="w-8 h-8 rounded-lg ${selected ? color.bg : 'bg-gray-200'} flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                ${(u.displayName||u.username||'U').charAt(0).toUpperCase()}
+            </div>
+            <div class="flex-1 text-left min-w-0">
+                <p class="text-xs font-bold ${selected ? 'text-gray-800' : 'text-gray-600'} truncate">${u.displayName || u.username}</p>
+                <p class="text-[10px] ${selected ? 'text-gray-500' : 'text-gray-400'}">@${u.username}</p>
+            </div>
+            ${selected ? `<div class="w-5 h-5 rounded-full ${color.bg} flex items-center justify-center flex-shrink-0"><i class="fas fa-check text-white text-[9px]"></i></div>` : '<div class="w-5 h-5 rounded-full border-2 border-gray-200 flex-shrink-0"></div>'}
+        </button>`;
+    }).join('');
 }
 
 function renderTeamMembers() {
     const c = document.getElementById('teamMembersList');
-    c.innerHTML = teamMembers.map((m, i) => `
-        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-semibold">
-            <i class="fas fa-user text-[9px]"></i> ${m}
-            <button onclick="removeTeamMember(${i})" class="text-amber-400 hover:text-amber-600 ml-0.5"><i class="fas fa-xmark text-[9px]"></i></button>
-        </span>
-    `).join('');
+    if (!c) return;
+    if (!teamMembers.length) {
+        c.innerHTML = '';
+        return;
+    }
+    c.innerHTML = teamMembers.map((m, i) => {
+        const color = TEAM_COLORS[m.color ?? i % TEAM_COLORS.length];
+        return `
+        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full ${color.light} ${color.text} text-[11px] font-semibold">
+            <div class="w-2.5 h-2.5 rounded-full ${color.bg}"></div>
+            ${m.displayName || m.userId}
+            <button onclick="toggleTeamMember('${m.userId}','${(m.displayName||'').replace(/'/g,\"\\'\")}')" class="${color.text} opacity-50 hover:opacity-100 ml-0.5"><i class="fas fa-xmark text-[9px]"></i></button>
+        </span>`;
+    }).join('');
 }
 
 // ===== TEAM REAL-TIME SYNC =====
@@ -694,6 +738,8 @@ function toggleTeamMode() {
     if (!enabled) {
         teamMembers = [];
         leaveTeamSession();
+    } else {
+        renderTeamUserPicker();
     }
     renderTeamMembers();
     updateTeamSyncButtons();
@@ -731,7 +777,7 @@ async function createTeamSession() {
             body: JSON.stringify({
                 ownerName: owner,
                 address: addr,
-                members: [{ userId: currentUser.id, displayName: currentUser.displayName }],
+                members: [{ userId: currentUser.id, displayName: currentUser.displayName, color: 0 }, ...teamMembers.map((m, i) => ({ userId: m.userId, displayName: m.displayName, color: m.color ?? (i + 1) % TEAM_COLORS.length }))],
                 initialData: inspectionData,
                 housePhotos: []  // Photos are too large for API polling
             })
@@ -805,6 +851,17 @@ async function confirmJoinSession() {
 }
 
 function mergeTeamData(session) {
+    // Sync team members with colors from session
+    const sessionMembers = session.members || [];
+    if (sessionMembers.length > 0 && teamMembers.length === 0) {
+        // If we have no local members but session has some, sync them
+        teamMembers = sessionMembers
+            .filter(m => m.userId !== currentUser?.id)
+            .map(m => ({ userId: m.userId, displayName: m.displayName, color: m.color ?? 0 }));
+        renderTeamMembers();
+        renderTeamUserPicker();
+    }
+
     // Merge currentData from session into local inspectionData
     const remoteData = session.currentData || {};
     let hasChanges = false;
@@ -812,10 +869,19 @@ function mergeTeamData(session) {
         if (!inspectionData[itemId]) {
             inspectionData[itemId] = remoteItem;
             hasChanges = true;
-        } else if (remoteItem.status && inspectionData[itemId].status !== remoteItem.status) {
-            // Remote has a different status - only merge if remote is newer
-            inspectionData[itemId] = remoteItem;
-            hasChanges = true;
+        } else {
+            // Always merge remote data - it may have different selectedBy info
+            const localStatus = inspectionData[itemId].status;
+            const remoteStatus = remoteItem.status;
+            if (remoteStatus && localStatus !== remoteStatus) {
+                inspectionData[itemId] = remoteItem;
+                hasChanges = true;
+            } else if (remoteItem.selectedBy && inspectionData[itemId].selectedBy !== remoteItem.selectedBy) {
+                // Another member selected this item - update the selectedBy
+                inspectionData[itemId].selectedBy = remoteItem.selectedBy;
+                inspectionData[itemId].selectedByName = remoteItem.selectedByName;
+                hasChanges = true;
+            }
         }
     }
     // Update property info from remote if we don't have it
@@ -830,7 +896,6 @@ function mergeTeamData(session) {
     if (hasChanges) {
         updateChecklistVisibility();
         renderChecklist();
-        showToast('📥 ได้รับข้อมูลจากทีม', '');
     }
     // Update online members display
     renderOnlineMembers(session.members || []);
@@ -839,11 +904,15 @@ function mergeTeamData(session) {
 function renderOnlineMembers(members) {
     const c = document.getElementById('teamOnlineMembers');
     if (!c) return;
-    c.innerHTML = members.map(m => `
-        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 text-[10px] font-semibold">
-            <i class="fas fa-user text-[8px]"></i> ${m.displayName || m.userId}
-        </span>
-    `).join('');
+    c.innerHTML = members.map(m => {
+        const color = TEAM_COLORS[m.color ?? 0];
+        const isMe = m.userId === currentUser?.id;
+        return `
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${color.light} ${color.text} text-[10px] font-semibold">
+            <div class="w-2 h-2 rounded-full ${color.bg}"></div>
+            ${m.displayName || m.userId}${isMe ? ' (คุณ)' : ''}
+        </span>`;
+    }).join('');
 }
 
 function startTeamPoll() {
@@ -856,7 +925,7 @@ function startTeamPoll() {
                 currentData: JSON.parse(JSON.stringify(inspectionData)),
                 ownerName: document.getElementById('ownerName').value.trim(),
                 address: document.getElementById('address').value.trim(),
-                members: [{ userId: currentUser?.id || '', displayName: currentUser?.displayName || '' }, ...teamMembers.map(n => ({ userId: '', displayName: n }))]
+                members: [{ userId: currentUser?.id || '', displayName: currentUser?.displayName || '', color: 0 }, ...teamMembers.map((m, i) => ({ userId: m.userId, displayName: m.displayName, color: m.color ?? (i + 1) % TEAM_COLORS.length }))]
             };
             await fetch(`${API_BASE}/team-sessions/${activeTeamSession.sessionId}`, {
                 method: 'PUT',
@@ -1150,11 +1219,18 @@ function setStatus(id, status) {
     const d = inspectionData[id];
     if (d.status === status) {
         d.status = null;
+        d.selectedBy = null;
+        d.selectedByName = null;
         if (status === 'fail') d.issues = [];
     } else {
         d.status = status;
         if (status === 'fail' && d.issues.length === 0) {
             d.issues.push({ note:'', photos:[] });
+        }
+        // Track who selected this item in team mode
+        if (document.getElementById('teamMode')?.checked && currentUser) {
+            d.selectedBy = currentUser.id;
+            d.selectedByName = currentUser.displayName || currentUser.username;
         }
     }
     updateItemUI(id);
@@ -1164,6 +1240,15 @@ function setStatus(id, status) {
 
 function updateItemUI(id) {
     const d = inspectionData[id];
+    const isTeamMode = document.getElementById('teamMode')?.checked;
+    const hasTeamMember = isTeamMode && d.selectedBy;
+
+    // Get team member color for this selection
+    let memberColor = null;
+    if (hasTeamMember) {
+        memberColor = getMemberColor(d.selectedBy);
+    }
+
     ['pass','fail','na'].forEach(s => {
         const btn = document.getElementById(`btn-${id}-${s}`);
         btn.classList.remove('bg-emerald-500','border-emerald-500','text-white',
@@ -1171,17 +1256,50 @@ function updateItemUI(id) {
                              'bg-gray-400','border-gray-400','text-white');
         btn.classList.add(s==='pass'?'border-emerald-300':s==='fail'?'border-rose-300':'border-gray-200',
                           s==='pass'?'text-emerald-600':s==='fail'?'text-rose-600':'text-gray-400');
+        // Remove any team color indicator
+        const existingDot = btn.querySelector('.team-dot');
+        if (existingDot) existingDot.remove();
     });
+
     const icon = document.getElementById(`icon-${id}`);
     icon.className = 'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 border-2 transition-all';
+    // Remove existing team dot from icon
+    const existingIconDot = icon.querySelector('.team-dot');
+    if (existingIconDot) existingIconDot.remove();
 
     if (d.status === 'pass') {
-        document.getElementById(`btn-${id}-pass`).classList.add('bg-emerald-500','border-emerald-500','text-white');
-        icon.classList.add('bg-emerald-500','border-emerald-500');
+        const btn = document.getElementById(`btn-${id}-pass`);
+        if (hasTeamMember && memberColor) {
+            btn.classList.add(memberColor.bg, memberColor.border, 'text-white');
+            btn.style.background = memberColor.hex;
+            btn.style.borderColor = memberColor.hex;
+        } else {
+            btn.classList.add('bg-emerald-500','border-emerald-500','text-white');
+        }
+        if (hasTeamMember && memberColor) {
+            icon.classList.add(memberColor.border);
+            icon.style.background = memberColor.hex;
+            icon.style.borderColor = memberColor.hex;
+        } else {
+            icon.classList.add('bg-emerald-500','border-emerald-500');
+        }
         icon.innerHTML = '<i class="fas fa-check text-white text-[10px]"></i>';
     } else if (d.status === 'fail') {
-        document.getElementById(`btn-${id}-fail`).classList.add('bg-rose-500','border-rose-500','text-white');
-        icon.classList.add('bg-rose-500','border-rose-500');
+        const btn = document.getElementById(`btn-${id}-fail`);
+        if (hasTeamMember && memberColor) {
+            btn.classList.add(memberColor.bg, memberColor.border, 'text-white');
+            btn.style.background = memberColor.hex;
+            btn.style.borderColor = memberColor.hex;
+        } else {
+            btn.classList.add('bg-rose-500','border-rose-500','text-white');
+        }
+        if (hasTeamMember && memberColor) {
+            icon.classList.add(memberColor.border);
+            icon.style.background = memberColor.hex;
+            icon.style.borderColor = memberColor.hex;
+        } else {
+            icon.classList.add('bg-rose-500','border-rose-500');
+        }
         icon.innerHTML = '<i class="fas fa-exclamation text-white text-[10px]"></i>';
         document.getElementById(`issues-${id}`).classList.remove('hidden');
         renderIssues(id);
@@ -1193,7 +1311,15 @@ function updateItemUI(id) {
     } else {
         icon.innerHTML = '<i class="fas fa-minus text-gray-300 text-[10px]"></i>';
         icon.classList.add('border-gray-200');
+        icon.style.background = '';
+        icon.style.borderColor = '';
         document.getElementById(`issues-${id}`).classList.add('hidden');
+    }
+
+    // Add team member name tooltip
+    if (hasTeamMember && d.status) {
+        const statusBtn = document.getElementById(`btn-${id}-${d.status}`);
+        statusBtn.title = `${d.selectedByName || 'ผู้ตรวจ'} เลือก${d.status === 'pass' ? 'ผ่าน' : d.status === 'fail' ? 'มีปัญหา' : 'ไม่มีรายการ'}`;
     }
 }
 
@@ -1349,6 +1475,12 @@ function startNewInspection() {
             inspectionData[it.id] = { status: null, issues: [] };
         });
     });
+
+    // Reset team mode
+    const teamModeEl = document.getElementById('teamMode');
+    if (teamModeEl) teamModeEl.checked = false;
+    document.getElementById('teamMembersSection')?.classList.add('hidden');
+    document.getElementById('teamSyncBar')?.classList.add('hidden');
 
     renderChecklist();
     switchPage('inspect');
@@ -1627,7 +1759,7 @@ function generateReport(r) {
             <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
                 <p class="text-[11px] font-bold text-amber-700 mb-2"><i class="fas fa-users mr-1"></i> ทีมตรวจ (${r.teamMembers.length} คน)</p>
                 <div class="flex flex-wrap gap-1.5">
-                    ${r.teamMembers.map(m => `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">${m}</span>`).join('')}
+                    ${r.teamMembers.map((m, i) => { const color = TEAM_COLORS[i % TEAM_COLORS.length]; const name = typeof m === 'string' ? m : (m.displayName || m.userId); return `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${color.light} ${color.text}"><div class="w-2 h-2 rounded-full ${color.bg} inline-block mr-1"></div>${name}</span>`; }).join('')}
                 </div>
             </div>
             ` : ''}
@@ -2732,6 +2864,8 @@ async function loadUsers() {
         if (data.users) {
             allUsers = data.users;
             renderUsers();
+            // Also refresh team user picker if team mode is active
+            if (document.getElementById('teamMode')?.checked) renderTeamUserPicker();
         } else if (data.error) {
             if (c) c.innerHTML = `<div class="text-center py-6"><div class="text-2xl mb-2">⚠️</div><p class="text-sm text-red-400">${data.error}</p></div>`;
         }
