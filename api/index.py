@@ -256,7 +256,7 @@ def register():
         except Exception:
             records = []
         for r in records:
-            if r.get("Username") == username and r.get("Active") == "true":
+            if r.get("Username") == username and (r.get("Active") or "").lower() == "true":
                 return jsonify({"error": "Username นี้ถูกใช้แล้ว"}), 400
 
         # Create user
@@ -342,7 +342,7 @@ def login():
         for r in records:
             if (r.get("Username") == username and
                 r.get("PasswordHash") == password_hash and
-                r.get("Active") == "true"):
+                (r.get("Active") or "").lower() == "true"):
 
                 user_id = r["UserID"]
                 role = r.get("Role", "inspector")
@@ -535,8 +535,8 @@ def share_report():
             if share_with == "all":
                 users_ws = get_or_create_worksheet(client, USERS_SHEET)
                 if users_ws:
-                    for ur in users_safe_get_all_records(ws):
-                        if ur.get("Active") == "true" and ur.get("UserID") != request.user["user_id"]:
+                    for ur in safe_get_all_records(users_ws):
+                        if (ur.get("Active") or "").lower() == "true" and ur.get("UserID") != request.user["user_id"]:
                             target_users.append(ur["UserID"])
             else:
                 target_users = [share_with]
@@ -582,7 +582,7 @@ def get_shared_with_me():
         inspection_map = {}
         if inspection_ws:
             try:
-                for ir in inspection_safe_get_all_records(ws):
+                for ir in safe_get_all_records(inspection_ws):
                     if ir.get("Raw JSON"):
                         insp = json.loads(ir["Raw JSON"])
                         inspection_map[str(ir.get("InspectionID", insp.get("id", "")))] = insp
@@ -693,7 +693,7 @@ def get_inspections():
         try:
             share_ws = get_or_create_worksheet(client, SHARE_SHEET)
             if share_ws:
-                share_records = share_safe_get_all_records(ws)
+                share_records = safe_get_all_records(share_ws)
                 for sr in share_records:
                     if sr.get("ShareWith") in [user_id, "all"]:
                         shared_ids.add(str(sr.get("InspectionID")))
@@ -788,9 +788,9 @@ def create_inspection():
         try:
             users_ws = get_or_create_worksheet(client, USERS_SHEET)
             if users_ws:
-                user_records = users_safe_get_all_records(ws)
+                user_records = safe_get_all_records(users_ws)
                 for ur in user_records:
-                    if ur.get("Role") == "admin" and ur.get("UserID") != request.user["user_id"] and ur.get("Active") == "true":
+                    if ur.get("Role") == "admin" and ur.get("UserID") != request.user["user_id"] and (ur.get("Active") or "").lower() == "true":
                         notif_id = f"notif_{secrets.token_hex(8)}"
                         ws_notif = get_or_create_worksheet(client, NOTIFICATION_SHEET, [
                             "NotifID", "UserID", "Type", "Title", "Message", "Link", "Read", "CreatedAt"
@@ -930,7 +930,7 @@ def get_notifications():
         unread = 0
         for r in records:
             if r.get("UserID") == user_id:
-                is_read = r.get("Read") == "true"
+                is_read = (r.get("Read") or "").lower() == "true"
                 if not is_read:
                     unread += 1
                 notifications.append({
@@ -1260,7 +1260,7 @@ def process_sync_queue():
                         ])
                         if custom_ws:
                             # Delete existing
-                            c_records = custom_safe_get_all_records(ws)
+                            c_records = safe_get_all_records(custom_ws)
                             for ci, cr in enumerate(c_records, start=2):
                                 if cr.get("UserID") == user_id:
                                     custom_ws.delete_rows(ci)
