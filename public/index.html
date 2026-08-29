@@ -202,7 +202,7 @@
                 <i class="fas fa-bell text-sm"></i>
                 <span id="notifBadge" class="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center hidden">0</span>
             </button>
-            <button onclick="exportJSON()" class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100 transition">
+            <button id="exportJsonBtn" onclick="exportJSON()" class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100 transition hidden">
                 <i class="fas fa-download text-sm"></i>
             </button>
             <button onclick="openUserMenu()" id="userAvatarBtn" class="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 text-white flex items-center justify-center text-sm font-bold shadow-md shadow-violet-500/20 hover:shadow-lg transition">
@@ -224,10 +224,10 @@
         <button class="nav-btn flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-semibold transition border-b-[3px] border-transparent text-gray-400" data-page="history" onclick="switchPage('history')">
             <i class="fas fa-clock-rotate-left text-lg"></i>ประวัติ
         </button>
-        <button class="nav-btn flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-semibold transition border-b-[3px] border-transparent text-gray-400" data-page="users" onclick="switchPage('users')">
+        <button id="nav-users" class="nav-btn flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-semibold transition border-b-[3px] border-transparent text-gray-400 hidden" data-page="users" onclick="switchPage('users')">
             <i class="fas fa-users text-lg"></i>ผู้ใช้
         </button>
-        <button class="nav-btn flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-semibold transition border-b-[3px] border-transparent text-gray-400" data-page="settings" onclick="switchPage('settings')">
+        <button id="nav-settings" class="nav-btn flex-1 py-3 flex flex-col items-center gap-1 text-[11px] font-semibold transition border-b-[3px] border-transparent text-gray-400 hidden" data-page="settings" onclick="switchPage('settings')">
             <i class="fas fa-gear text-lg"></i>ตั้งค่า
         </button>
     </div>
@@ -587,6 +587,11 @@ document.addEventListener('visibilitychange', () => {
 
 // ===== NAV =====
 function switchPage(id) {
+    // Block non-admin from admin-only pages
+    if ((id === 'settings' || id === 'users') && (!currentUser || currentUser.role !== 'admin')) {
+        showToast('ไม่มีสิทธิ์เข้าถึงหน้านี้ (Admin only)','error');
+        return;
+    }
     document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
     document.getElementById('pg-' + id).classList.remove('hidden');
     document.getElementById('pg-' + id).classList.add('anim-slide-up');
@@ -2251,9 +2256,22 @@ function updateUserUI() {
         const roleColors = { admin:'from-rose-500 to-rose-600', inspector:'from-brand-500 to-brand-600', viewer:'from-gray-500 to-gray-600' };
         btn.className = `w-9 h-9 rounded-xl bg-gradient-to-br ${roleColors[currentUser.role] || roleColors.viewer} text-white flex items-center justify-center text-sm font-bold shadow-md transition`;
         btn.innerHTML = initial;
+        // Show/hide admin-only nav tabs
+        const isAdmin = currentUser.role === 'admin';
+        const navUsers = document.getElementById('nav-users');
+        const navSettings = document.getElementById('nav-settings');
+        const exportBtn = document.getElementById('exportJsonBtn');
+        if (navUsers) navUsers.classList.toggle('hidden', !isAdmin);
+        if (navSettings) navSettings.classList.toggle('hidden', !isAdmin);
+        if (exportBtn) exportBtn.classList.toggle('hidden', !isAdmin);
     } else {
         btn.className = 'w-9 h-9 rounded-xl bg-gradient-to-br from-gray-400 to-gray-500 text-white flex items-center justify-center text-sm shadow-md transition';
         btn.innerHTML = '<i class="fas fa-user"></i>';
+        // Hide admin tabs when logged out
+        ['nav-users','nav-settings'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('hidden');
+        });
     }
 }
 
