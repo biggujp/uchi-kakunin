@@ -688,8 +688,33 @@ function renderChecklist() {
     // Update stats after render
     updateStats();
 
-    // Open first
-    if (CHECKLIST.length) toggleSection(CHECKLIST[0].id);
+    // Restore button colors from inspectionData (for edit mode)
+    Object.keys(inspectionData).forEach(id => {
+        if (inspectionData[id] && inspectionData[id].status) {
+            updateItemUI(id);
+        }
+    });
+
+    // Build item→section map for auto-expand
+    const itemSectionMap = {};
+    CHECKLIST.forEach(sec => {
+        getSectionItems(sec.id).forEach(it => { itemSectionMap[it.id] = sec.id; });
+    });
+    const expandedSections = new Set();
+    Object.keys(inspectionData).forEach(id => {
+        if (inspectionData[id] && inspectionData[id].status && itemSectionMap[id]) {
+            expandedSections.add(itemSectionMap[id]);
+        }
+    });
+    CHECKLIST.forEach(sec => {
+        if (expandedSections.has(sec.id)) {
+            const body = document.getElementById('secBody-' + sec.id);
+            if (body && body.classList.contains('hidden')) toggleSection(sec.id);
+        }
+    });
+
+    // Fallback: open first section if nothing expanded
+    if (!expandedSections.size && CHECKLIST.length) toggleSection(CHECKLIST[0].id);
 }
 
 function renderItem(item, sectionId) {
