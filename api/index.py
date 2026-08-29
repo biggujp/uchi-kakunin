@@ -625,33 +625,6 @@ def api_index():
     })
 
 
-@app.route("/api/test-sheets", methods=["GET"])
-def test_sheets():
-    """Test Google Sheets connection"""
-    result = {
-        "has_sheets_id": bool(GOOGLE_SHEETS_ID),
-        "has_service_account": bool(SERVICE_ACCOUNT_JSON),
-        "client_ok": False,
-        "sheets": [],
-        "error": None
-    }
-    try:
-        client = get_google_sheets_client()
-        if not client:
-            result["error"] = "Cannot create Google Sheets client"
-            return jsonify(result)
-        result["client_ok"] = True
-
-        spreadsheet = client.open_by_key(GOOGLE_SHEETS_ID)
-        result["spreadsheet_title"] = spreadsheet.title
-        result["sheets"] = [ws.title for ws in spreadsheet.worksheets()]
-        return jsonify(result)
-    except Exception as e:
-        result["error"] = f"{type(e).__name__}: {str(e)}"
-        return jsonify(result)
-
-
-
 @app.route("/api/inspections", methods=["GET"])
 @require_auth
 def get_inspections():

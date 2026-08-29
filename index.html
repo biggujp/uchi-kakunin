@@ -2314,15 +2314,21 @@ async function testGoogleSheets() {
     if (!resultEl) return;
     resultEl.innerHTML = '<div class="p-3 rounded-xl bg-blue-50 text-blue-600 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังทดสอบ...</div>';
     try {
-        const res = await fetch(`${API_BASE}/test-sheets`, { headers: { 'Authorization': `Bearer ${authToken || ''}` } });
-        const data = await res.json();
-        if (data.error) {
+        // Test API health
+        const healthRes = await fetch(`${API_BASE}`);
+        const healthData = await healthRes.json();
+        if (healthData.status !== 'ok') {
             resultEl.innerHTML = `<div class="p-3 rounded-xl bg-rose-50 border border-rose-200">
-                <p class="text-sm font-bold text-rose-600 mb-1">❌ เชื่อมต่อไม่สำเร็จ</p>
-                <p class="text-xs text-rose-500">${data.error}</p>
-                <p class="text-[10px] text-gray-400 mt-2">ตรวจสอบใน Vercel → Settings → Environment Variables:<br>- SERVICE_ACCOUNT_JSON (ต้องเป็น JSON ที่ถูกต้อง)<br>- GOOGLE_SHEETS_ID (ต้องตรงกับ Google Sheet)</p>
+                <p class="text-sm font-bold text-rose-600 mb-1">❌ เชื่อมต่อ API ไม่ได้</p>
+                <p class="text-xs text-rose-500">API ตอบกลับไม่ถูกต้อง</p>
             </div>`;
-        } else if (data.client_ok && data.sheets.length) {
+            return;
+        }
+        // Test Google Sheets (via notifications endpoint - requires auth)
+        const sheetsRes = await fetch(`${API_BASE}/notifications`, {
+            headers: { 'Authorization': `Bearer ${authToken || ''}` }
+        });
+        if (sheetsRes.ok) {
             resultEl.innerHTML = `<div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
                 <div class="flex items-center gap-2 mb-2">
                     <div class="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center">
@@ -2334,20 +2340,19 @@ async function testGoogleSheets() {
                     </div>
                 </div>
                 <div class="bg-white rounded-lg p-2 mt-2">
-                    <p class="text-[10px] font-semibold text-gray-500 mb-1">Spreadsheet: <span class="text-gray-700">${data.spreadsheet_title || data.sheets_id}</span></p>
-                    <p class="text-[10px] font-semibold text-gray-500">Sheets: <span class="text-gray-700">${data.sheets.join(', ')}</span></p>
-                    <p class="text-[10px] font-semibold text-gray-500">Sheets ทั้งหมด: <span class="text-emerald-600 font-bold">${data.sheets.length} ชีท</span></p>
+                    <p class="text-[10px] font-semibold text-gray-500">API: <span class="text-emerald-600 font-bold">เชื่อมต่อแล้ว</span></p>
+                    <p class="text-[10px] font-semibold text-gray-500">Google Sheets: <span class="text-emerald-600 font-bold">ทำงานปกติ</span></p>
                 </div>
             </div>`;
-        } else if (data.client_ok && !data.sheets.length) {
+        } else if (sheetsRes.status === 401) {
             resultEl.innerHTML = `<div class="p-3 rounded-xl bg-amber-50 border border-amber-200">
-                <p class="text-sm font-bold text-amber-600 mb-1">⚠️ เชื่อมต่อได้ แต่ไม่มี sheet</p>
-                <p class="text-xs text-amber-500">Google Sheet ว่างเปล่า - ระบบจะสร้าง sheet อัตโนมัติเมื่อเริ่มใช้งาน</p>
+                <p class="text-sm font-bold text-amber-600 mb-1">⚠️ กรุณาเข้าสู่ระบบก่อนทดสอบ</p>
+                <p class="text-xs text-amber-500">ต้อง login ก่อนทดสอบ Google Sheets</p>
             </div>`;
         } else {
-            resultEl.innerHTML = `<div class="p-3 rounded-xl bg-amber-50 border border-amber-200">
-                <p class="text-sm font-bold text-amber-600 mb-1">⚠️ ตรวจสอบข้อมูล</p>
-                <p class="text-xs text-amber-500">has_sheets_id: ${data.has_sheets_id} | has_service_account: ${data.has_service_account}</p>
+            resultEl.innerHTML = `<div class="p-3 rounded-xl bg-rose-50 border border-rose-200">
+                <p class="text-sm font-bold text-rose-600 mb-1">❌ เชื่อมต่อ Google Sheets ไม่สำเร็จ</p>
+                <p class="text-xs text-rose-500">ตรวจสอบ SERVICE_ACCOUNT_JSON และ GOOGLE_SHEETS_ID ใน Vercel</p>
             </div>`;
         }
     } catch(e) {
