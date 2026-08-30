@@ -1543,6 +1543,96 @@ def complete_team_session(session_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/team-sessions/<session_id>/delete", methods=["POST"])
+@app.route("/api/team-sessions/<session_id>", methods=["DELETE"])
+@require_auth
+def delete_team_session(session_id):
+    """ลบ team session - สำหรับ owner หรือ admin เท่านั้น"""
+    try:
+        client = get_google_sheets_client()
+        if not client:
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
+
+        ws = get_or_create_worksheet(client, TEAM_SESSION_SHEET)
+        if not ws:
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
+
+        records = safe_get_all_records(ws)
+        user_id = request.user["user_id"]
+        user_role = request.user["role"]
+
+        for idx, r in enumerate(records, start=2):
+            if r.get("SessionID") == session_id:
+                # Only owner or admin can delete
+                if r.get("OwnerUserID") != user_id and user_role != "admin":
+                    return jsonify({"error": "ไม่มีสิทธิ์ลบ session นี้"}), 403
+
+                # Delete row from Google Sheets
+                ws.delete_rows(idx, idx)
+
+                # Send notification to all members
+                members = []
+                try:
+                    members = json.loads(r.get("Members", "[]"))
+                except: pass
+                owner_name = r.get("OwnerName", "")
+                address = r.get("Address", "")
+                for m in members:
+                    if m.get("userId") and m.get("userId") != user_id:
+                        _create_notification_internal(
+                            target_user_id=m["userId"],
+                            notif_type="team_session_ended",
+                            title="🔴 ทีมตรวจสิ้นสุด",
+                            message=f"ทีมตรวจที่ {address or owner_name} ถูกปิดแล้ว",
+                            link=""
+                        )
+
+                log_activity(user_id, "delete_team_session", f"Session {session_id}")
+                return jsonify({"status": "ok"})
+
+        return jsonify({"error": "Session not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/team-sessions/all", methods=["GET"])
+@require_auth
+def list_all_team_sessions():
+    """ดึง team sessions ทั้งหมด - สำหรับ admin เท่านั้น"""
+    try:
+        if request.user["role"] != "admin":
+            return jsonify({"error": "Admin only"}), 403
+
+        client = get_google_sheets_client()
+        if not client:
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
+
+        ws = get_or_create_worksheet(client, TEAM_SESSION_SHEET)
+        if not ws:
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
+
+        records = safe_get_all_records(ws)
+        sessions = []
+        for r in records:
+            if r.get("Status") == "active":
+                members = []
+                try:
+                    members = json.loads(r.get("Members", "[]"))
+                except: pass
+                sessions.append({
+                    "sessionId": r.get("SessionID"),
+                    "ownerName": r.get("OwnerName"),
+                    "address": r.get("Address"),
+                    "members": members,
+                    "lastUpdate": r.get("LastUpdate"),
+                    "createdAt": r.get("CreatedAt")
+                })
+
+        return jsonify({"status": "ok", "sessions": sessions})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ===== HELPERS =====
 
 def save_local_backup(data):
