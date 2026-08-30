@@ -319,7 +319,7 @@
                     <input type="checkbox" id="teamMode" class="w-5 h-5 rounded-lg border-amber-300 text-amber-500 focus:ring-amber-400" onchange="toggleTeamMode()">
                     <div>
                         <span class="text-sm font-semibold text-amber-800">👥 โหมดทีมตรวจ</span>
-                        <p class="text-[11px] text-amber-600">多人ร่วมตรวจบ้านหลังเดียว</p>
+                        <p class="text-[11px] text-amber-600">ร่วมกันตรวจ</p>
                     </div>
                 </label>
                 <div id="teamMembersSection" class="hidden mt-3 pt-3 border-t border-amber-200">
@@ -852,6 +852,9 @@ async function confirmJoinSession() {
         closeJoinTeamModal();
         showToast('เข้าร่วมทีมสำเร็จ!', 'success');
         document.getElementById('teamSyncStatus').textContent = '🟢 เชื่อมต่อแล้ว';
+        // ซ่อนปุ่มบันทึกรายงานการตรวจสำหรับสมาชิกที่เข้าร่วม
+        const submitBar = document.getElementById('submitBar');
+        if (submitBar) submitBar.style.display = 'none';
     } catch(e) {
         showToast('ไม่สามารถเข้าร่วมทีมได้', 'error');
     }
@@ -968,6 +971,14 @@ function leaveTeamSession() {
     document.getElementById('teamSyncStatus').textContent = '🔄 ยังไม่ได้เชื่อมต่อ';
     document.getElementById('teamOnlineMembers').innerHTML = '';
     document.getElementById('teamSyncTime').textContent = '';
+    // แสดงปุ่มบันทึกรายงานการตรวจกลับมาเมื่อออกจากทีม
+    const submitBar = document.getElementById('submitBar');
+    if (submitBar) {
+        const inspectPage = document.getElementById('pg-inspect');
+        if (inspectPage && !inspectPage.classList.contains('hidden')) {
+            submitBar.style.display = 'block';
+        }
+    }
 }
 
 // Restore team session on page load
