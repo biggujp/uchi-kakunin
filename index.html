@@ -815,10 +815,15 @@ async function createTeamSession() {
 
 let pendingInvitations = [];
 let currentInviteIndex = 0;
+let invitePollInterval = null;
 
 // Check for pending team invitations after login
 async function checkPendingInvitations() {
     if (!currentUser || !authToken || !API_BASE) return;
+    // ไม่แสดง popup ซ้ำถ้า modal เปิดอยู่แล้ว หรือ มี team session อยู่แล้ว
+    const modal = document.getElementById('teamInviteModal');
+    if (modal && !modal.classList.contains('hidden')) return;
+    if (activeTeamSession) return;
     try {
         const res = await fetch(`${API_BASE}/team-sessions/pending`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
@@ -830,6 +835,18 @@ async function checkPendingInvitations() {
             showTeamInvitation();
         }
     } catch(e) { /* ignore */ }
+}
+
+function startInvitePoll() {
+    if (invitePollInterval) clearInterval(invitePollInterval);
+    invitePollInterval = setInterval(checkPendingInvitations, 8000);
+}
+
+function stopInvitePoll() {
+    if (invitePollInterval) {
+        clearInterval(invitePollInterval);
+        invitePollInterval = null;
+    }
 }
 
 function showTeamInvitation() {
@@ -2737,6 +2754,7 @@ function checkAuth() {
                 checkUnreadCount();
                 startNotifPoll();
                 checkPendingInvitations();
+                startInvitePoll();
             } else {
                 authToken = '';
                 localStorage.removeItem('authToken');
@@ -2811,6 +2829,7 @@ async function doLogin() {
             checkUnreadCount();
             startNotifPoll();
             checkPendingInvitations();
+            startInvitePoll();
         } else {
             showToast(data.error || 'เข้าสู่ระบบไม่สำเร็จ','error');
         }
@@ -2844,6 +2863,7 @@ async function doRegister() {
             loadUsers();
             startNotifPoll();
             checkPendingInvitations();
+            startInvitePoll();
         } else {
             showToast(data.error || 'สมัครไม่สำเร็จ','error');
         }
@@ -2857,6 +2877,7 @@ function doLogout() {
     currentUser = null;
     localStorage.removeItem('authToken');
     stopNotifPoll();
+    stopInvitePoll();
     updateUserUI();
     closeUserMenu();
     showToast('ออกจากระบบแล้ว','');
@@ -3955,6 +3976,10 @@ function stopNotifPoll() {
         notifPollInterval = null;
     }
 }
+
+// ===== INVITE POLLING =====
+// Polls for pending team invitations every 8 seconds for logged-in users.
+// Shows accept/decline popup when team leader starts a session.
 
 // ===== TOAST =====
 function showToast(msg, type='') {
