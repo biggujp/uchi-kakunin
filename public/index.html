@@ -133,10 +133,16 @@
                 <i class="fas fa-users"></i>
             </div>
             <h2 class="text-lg font-bold text-gray-800">เข้าร่วมทีมตรวจ</h2>
-            <p class="text-xs text-gray-400 mt-1">กรอกรหัสทีมที่ต้องการเข้าร่วม</p>
+            <p class="text-xs text-gray-400 mt-1">เลือกรหัสทีมที่กำลังเปิดซิงค์อยู่</p>
         </div>
         <div class="space-y-3">
-            <input type="text" id="joinSessionInput" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 focus:border-violet-400 outline-none text-sm font-mono" placeholder="team_xxxxxxxxxxxx">
+            <div id="joinSessionLoading" class="text-center py-4 text-gray-400 text-sm">
+                <i class="fas fa-spinner fa-spin mr-1"></i> กำลังโหลดรายการทีม...
+            </div>
+            <select id="joinSessionSelect" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 focus:border-violet-400 outline-none text-sm bg-white" style="display:none;">
+                <option value="">-- เลือกรหัสทีม --</option>
+            </select>
+            <p id="joinSessionEmpty" class="text-center text-gray-400 text-sm py-2" style="display:none;">ไม่มีทีมที่กำลังเปิดซิงค์อยู่</p>
             <div class="flex gap-2">
                 <button onclick="confirmJoinSession()" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white font-bold text-sm shadow-lg active:scale-[0.98] transition">
                     <i class="fas fa-sign-in-alt mr-1"></i> เข้าร่วม
@@ -738,6 +744,12 @@ let teamSessionData = {};  // Current merged data from all members
 
 function toggleTeamMode() {
     const enabled = document.getElementById('teamMode').checked;
+    if (enabled && (!currentUser || !authToken)) {
+        showToast('กรุณาเข้าสู่ระบบก่อนใช้โหมดทีม', 'error');
+        document.getElementById('teamMode').checked = false;
+        showAuthModal();
+        return;
+    }
     document.getElementById('teamMembersSection').classList.toggle('hidden', !enabled);
     document.getElementById('teamSyncBar').classList.toggle('hidden', !enabled);
     if (!enabled) {
@@ -809,12 +821,19 @@ async function createTeamSession() {
     }
 }
 
-function joinTeamSession() {
+async function joinTeamSession() {
+    // บังคับ login ก่อน
+    if (!currentUser || !authToken) {
+        showToast('กรุณาเข้าสู่ระบบก่อนใช้โหมดทีม', 'error');
+        showAuthModal();
+        return;
+    }
     document.getElementById('joinTeamModal').classList.remove('hidden');
-    document.getElementById('joinSessionInput').focus();
     // ซ่อนปุ่มบันทึกรายงานการตรวจเมื่อกดเข้าร่วมทีม
     const submitBar = document.getElementById('submitBar');
     if (submitBar) submitBar.style.display = 'none';
+    // โหลดรายการทีมที่กำลังซิงค์อยู่
+    await loadAvailableTeamSessions();
 }
 
 function closeJoinTeamModal() {
@@ -829,10 +848,41 @@ function closeJoinTeamModal() {
     }
 }
 
+async function loadAvailableTeamSessions() {
+    const loading = document.getElementById('joinSessionLoading');
+    const select = document.getElementById('joinSessionSelect');
+    const empty = document.getElementById('joinSessionEmpty');
+    loading.style.display = 'block';
+    select.style.display = 'none';
+    empty.style.display = 'none';
+    try {
+        const res = await fetch(`${API_BASE}/team-sessions`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        loading.style.display = 'none';
+        const sessions = data.sessions || [];
+        if (sessions.length === 0) {
+            empty.style.display = 'block';
+        } else {
+            select.style.display = 'block';
+            select.innerHTML = '<option value="">-- เลือกรหัสทีม --</option>' + sessions.map(s => {
+                const memberCount = (s.members || []).length;
+                const updated = s.lastUpdate ? new Date(s.lastUpdate).toLocaleString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '';
+                return `<option value="${s.sessionId}">${s.sessionId} — ${s.ownerName || 'ไม่ระบุ'} (${s.address || '-'}) [${memberCount} คน] ${updated}</option>`;
+            }).join('');
+        }
+    } catch(e) {
+        loading.style.display = 'none';
+        empty.style.display = 'block';
+        empty.textContent = 'ไม่สามารถโหลดรายการทีมได้';
+    }
+}
+
 async function confirmJoinSession() {
-    const sessionId = document.getElementById('joinSessionInput').value.trim();
+    const sessionId = document.getElementById('joinSessionSelect').value;
     if (!sessionId) {
-        showToast('กรุณากรอกรหัสทีม', 'error');
+        showToast('กรุณาเลือกรหัสทีม', 'error');
         return;
     }
     if (!currentUser || !authToken) {
