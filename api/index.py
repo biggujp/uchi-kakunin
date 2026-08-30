@@ -372,12 +372,16 @@ def get_users():
             uid = r.get("UserID", "")
             if not uid:
                 continue
+            # แสดงเฉพาะ user ที่ Active (ไม่แสดง user ที่ถูกลบ/ปิดใช้งาน)
+            active_val = (r.get("Active") or "true")
+            if str(active_val).lower() == "false":
+                continue
             users.append({
                 "id": uid,
                 "username": r.get("Username", ""),
                 "displayName": r.get("DisplayName", ""),
                 "role": r.get("Role", "inspector"),
-                "active": r.get("Active", "true").lower() != "false",
+                "active": True,
                 "createdAt": r.get("CreatedAt", ""),
                 "lastLogin": r.get("LastLogin", "")
             })

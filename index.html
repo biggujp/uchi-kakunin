@@ -2933,16 +2933,15 @@ function renderUsers() {
     const roleLabels = { admin:'👨‍💼 Admin', inspector:'🔍 Inspector', viewer:'👁️ Viewer' };
     c.innerHTML = allUsers.map(u => {
         const isSelf = u.id === currentUser?.id;
-        const isInactive = u.active === false;
-        return `
-        <div class="px-5 py-3 flex items-center gap-3 ${isSelf ? 'bg-brand-50/50' : ''} ${isInactive ? 'opacity-50' : ''}">
-            <div class="w-10 h-10 rounded-xl ${isInactive ? 'bg-gray-300' : (isSelf ? 'bg-gradient-to-br from-brand-400 to-brand-500' : 'bg-gradient-to-br from-violet-400 to-violet-500')} flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                return `
+        <div class="px-5 py-3 flex items-center gap-3 ${isSelf ? 'bg-brand-50/50' : ''}">
+            <div class="w-10 h-10 rounded-xl isSelf ? 'bg-gradient-to-br from-brand-400 to-brand-500' : 'bg-gradient-to-br from-violet-400 to-violet-500' flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                 ${(u.displayName||'U').charAt(0).toUpperCase()}
             </div>
             <div class="flex-1 min-w-0">
-                <h4 class="text-sm font-bold ${isInactive ? 'text-gray-400 line-through' : 'text-gray-800'} truncate">${u.displayName || u.username} ${isSelf ? '<span class="text-[10px] text-brand-500 font-normal">(คุณ)</span>' : ''}</h4>
+                <h4 class="text-sm font-bold text-gray-800 truncate">${u.displayName || u.username} ${isSelf ? '<span class="text-[10px] text-brand-500 font-normal">(คุณ)</span>' : ''}</h4>
                 <p class="text-[11px] text-gray-400">@${u.username}</p>
-                ${isInactive ? '<p class="text-[10px] text-red-400 font-semibold">🚫 ปิดใช้งาน</p>' : ''}
+                
             </div>
             <div class="flex items-center gap-2">
                 <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${roleBadge[u.role]||''}">${roleLabels[u.role]||u.role}</span>
@@ -2951,9 +2950,7 @@ function renderUsers() {
                     <button onclick="cycleUserRole('${u.id}','${u.role}')" class="w-7 h-7 rounded-lg bg-gray-100 text-gray-500 hover:bg-brand-100 hover:text-brand-600 flex items-center justify-center transition" title="เปลี่ยนบทบาท">
                         <i class="fas fa-pen text-[10px]"></i>
                     </button>
-                    <button onclick="toggleUserActive('${u.id}', ${!isInactive})" class="w-7 h-7 rounded-lg ${isInactive ? 'bg-emerald-100 text-emerald-500' : 'bg-amber-100 text-amber-500'} flex items-center justify-center transition" title="${isInactive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}">
-                        <i class="fas fa-${isInactive ? 'check' : 'ban'} text-[10px]"></i>
-                    </button>
+
                     <button onclick="deleteUser('${u.id}','${u.displayName||u.username}')" class="w-7 h-7 rounded-lg bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-500 flex items-center justify-center transition" title="ลบผู้ใช้">
                         <i class="fas fa-trash text-[10px]"></i>
                     </button>
@@ -2976,20 +2973,6 @@ async function cycleUserRole(userId, currentRole) {
             body: JSON.stringify({ role: newRole })
         });
         if (res.ok) { showToast('เปลี่ยนบทบาทสำเร็จ!','success'); loadUsers(); }
-        else showToast('เกิดข้อผิดพลาด','error');
-    } catch(e) { showToast('เกิดข้อผิดพลาด','error'); }
-}
-
-async function toggleUserActive(userId, currentlyActive) {
-    const action = currentlyActive ? 'ปิดใช้งาน' : 'เปิดใช้งาน';
-    if (!confirm(`${action} ผู้ใช้นี้?`)) return;
-    try {
-        const res = await fetch(`${API_BASE}/users/${userId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-            body: JSON.stringify({ active: !currentlyActive })
-        });
-        if (res.ok) { showToast(`${action}สำเร็จ!`,'success'); loadUsers(); }
         else showToast('เกิดข้อผิดพลาด','error');
     } catch(e) { showToast('เกิดข้อผิดพลาด','error'); }
 }
