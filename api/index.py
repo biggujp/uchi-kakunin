@@ -1365,12 +1365,63 @@ def update_team_session(session_id):
         records = safe_get_all_records(ws)
         for idx, r in enumerate(records, start=2):
             if r.get("SessionID") == session_id:
-                # Update current data
+                # MERGE currentData instead of replace (prevent race condition)
                 if "currentData" in data:
-                    ws.update_cell(idx, 7, json.dumps(data["currentData"], ensure_ascii=False))
+                    existing_data = {}
+                    try:
+                        existing_data = json.loads(r.get("CurrentData", "{}"))
+                    except: pass
+                    incoming = data["currentData"]
+                    # Deep merge: for each item, keep the one with later userId or merge photos
+                    for itemId, incomingItem in incoming.items():
+                        if itemId not in existing_data:
+                            existing_data[itemId] = incomingItem
+                        else:
+                            existingItem = existing_data[itemId]
+                            # If same item from different users, merge
+                            incomingUserId = incomingItem.get("userId", "")
+                            existingUserId = existingItem.get("userId", "")
+                            if incomingUserId and incomingUserId != existingUserId:
+                                # Different users - merge status, photos, issues
+                                if incomingItem.get("status"):
+                                    existingItem["status"] = incomingItem["status"]
+                                if incomingItem.get("selectedBy"):
+                                    existingItem["selectedBy"] = incomingItem["selectedBy"]
+                                if incomingItem.get("selectedByName"):
+                                    existingItem["selectedByName"] = incomingItem["selectedByName"]
+                                # Merge issues/photos
+                                incomingIssues = incomingItem.get("issues", [])
+                                existingIssues = existingItem.get("issues", [])
+                                while len(existingIssues) < len(incomingIssues):
+                                    existingIssues.append({"note": "", "photos": []})
+                                for i in range(len(incomingIssues)):
+                                    if i < len(existingIssues):
+                                        # Merge photos additively
+                                        remotePhotos = incomingIssues[i].get("photos", [])
+                                        localPhotos = existingIssues[i].get("photos", [])
+                                        for p in remotePhotos:
+                                            if p not in localPhotos:
+                                                localPhotos.append(p)
+                                        existingIssues[i]["photos"] = localPhotos
+                                        # Merge note
+                                        if incomingIssues[i].get("note") and not existingIssues[i].get("note"):
+                                            existingIssues[i]["note"] = incomingIssues[i]["note"]
+                                existingItem["issues"] = existingIssues
+                            else:
+                                # Same user or no userId - just update
+                                existing_data[itemId] = incomingItem
+                    ws.update_cell(idx, 7, json.dumps(existing_data, ensure_ascii=False))
+                # MERGE housePhotos additively
                 if "housePhotos" in data:
-                    ws.update_cell(idx, 10, json.dumps(data["housePhotos"], ensure_ascii=False))
-                # Update property info
+                    existing_photos = []
+                    try:
+                        existing_photos = json.loads(r.get("HousePhotos", "[]"))
+                    except: pass
+                    for photo in data["housePhotos"]:
+                        if photo not in existing_photos:
+                            existing_photos.append(photo)
+                    ws.update_cell(idx, 10, json.dumps(existing_photos, ensure_ascii=False))
+                # Update property info (leader is source of truth)
                 if "ownerName" in data:
                     ws.update_cell(idx, 3, data["ownerName"])
                 if "address" in data:

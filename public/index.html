@@ -934,77 +934,66 @@ function mergeTeamData(session) {
         renderTeamUserPicker();
     }
 
-    // Merge currentData from session into local inspectionData
+    // Server already merges data - just apply server state to local
     const remoteData = session.currentData || {};
     let hasChanges = false;
+    const myId = currentUser?.id || '';
+
     for (const [itemId, remoteItem] of Object.entries(remoteData)) {
+        if (itemId === '__property__') continue; // handle property separately
+        if (!remoteItem || typeof remoteItem !== 'object') continue;
+
+        const remoteUserId = remoteItem.userId || remoteItem.selectedBy || '';
+
         if (!inspectionData[itemId]) {
-            // New item from remote - add it
-            inspectionData[itemId] = remoteItem;
+            // Item exists on server but not locally - add it
+            inspectionData[itemId] = JSON.parse(JSON.stringify(remoteItem));
+            inspectionData[itemId].lastEditedBy = remoteUserId || '';
             hasChanges = true;
-        } else {
-            const remoteUserId = remoteItem.userId || remoteItem.selectedBy || '';
-            const localUserId = inspectionData[itemId].userId || inspectionData[itemId].selectedBy || '';
-            
-            const isRemoteFromOther = remoteUserId && remoteUserId !== currentUser?.id;
-            if (isRemoteFromOther && (remoteUserId !== localUserId || !localUserId)) {
-                // This item was changed by ANOTHER team member - always merge their changes
-                if (remoteItem.status) inspectionData[itemId].status = remoteItem.status;
-                inspectionData[itemId].selectedBy = remoteItem.selectedBy || remoteUserId;
-                inspectionData[itemId].selectedByName = remoteItem.selectedByName || remoteItem.userName || '';
-                // Merge photos from other member (add new ones, don't remove existing)
-                if (remoteItem.issues) {
-                    // Merge issues - each issue has its own photos
-                    const localIssues = inspectionData[itemId].issues || [];
-                    const remoteIssues = remoteItem.issues || [];
-                    // If remote has more issues, extend
-                    while (localIssues.length < remoteIssues.length) {
-                        localIssues.push({ note: '', photos: [] });
-                    }
-                    for (let i = 0; i < remoteIssues.length; i++) {
-                        // Merge photos from remote into local
-                        if (remoteIssues[i].photos && remoteIssues[i].photos.length) {
-                            const localPhotos = localIssues[i].photos || [];
-                            for (const photo of remoteIssues[i].photos) {
-                                if (!localPhotos.includes(photo)) {
-                                    localPhotos.push(photo);
-                                }
-                            }
-                            localIssues[i].photos = localPhotos;
-                        }
-                        // Merge note from remote if local is empty
-                        if (remoteIssues[i].note && !localIssues[i].note) {
-                            localIssues[i].note = remoteIssues[i].note;
-                        }
-                    }
-                    inspectionData[itemId].issues = localIssues;
+        } else if (remoteUserId && remoteUserId !== myId) {
+            // Item from ANOTHER team member - use server version (already merged)
+            inspectionData[itemId].status = remoteItem.status || inspectionData[itemId].status;
+            inspectionData[itemId].selectedBy = remoteItem.selectedBy || remoteUserId;
+            inspectionData[itemId].selectedByName = remoteItem.selectedByName || remoteItem.userName || '';
+            inspectionData[itemId].lastEditedBy = remoteUserId;
+            // Merge issues/photos from server
+            if (remoteItem.issues) {
+                const localIssues = inspectionData[itemId].issues || [];
+                const remoteIssues = remoteItem.issues;
+                while (localIssues.length < remoteIssues.length) {
+                    localIssues.push({ note: '', photos: [] });
                 }
-                hasChanges = true;
-            } else {
-                // Same user or no userId - update status if changed
-                const remoteStatus = remoteItem.status;
-                if (remoteStatus && inspectionData[itemId].status !== remoteStatus) {
-                    inspectionData[itemId].status = remoteStatus;
-                    hasChanges = true;
-                } else if (remoteItem.selectedBy && inspectionData[itemId].selectedBy !== remoteItem.selectedBy) {
-                    inspectionData[itemId].selectedBy = remoteItem.selectedBy;
-                    inspectionData[itemId].selectedByName = remoteItem.selectedByName;
-                    hasChanges = true;
+                for (let i = 0; i < remoteIssues.length; i++) {
+                    if (!localIssues[i]) localIssues[i] = { note: '', photos: [] };
+                    // Server already merged photos - just apply
+                    if (remoteIssues[i].photos && remoteIssues[i].photos.length) {
+                        const localPhotos = localIssues[i].photos || [];
+                        for (const photo of remoteIssues[i].photos) {
+                            if (!localPhotos.includes(photo)) localPhotos.push(photo);
+                        }
+                        localIssues[i].photos = localPhotos;
+                    }
+                    if (remoteIssues[i].note && !localIssues[i].note) {
+                        localIssues[i].note = remoteIssues[i].note;
+                    }
                 }
+                inspectionData[itemId].issues = localIssues;
             }
+            hasChanges = true;
         }
+        // If item is from current user, keep local version (don't overwrite own changes)
     }
 
-    // Merge housePhotos from session (other members' photos)
+    // Check for items that exist locally but not on server (we just added them, server hasn't seen yet)
+    // No action needed - next poll will include them
+
+    // Merge housePhotos from server (server already merged additively)
     const remoteHousePhotos = session.housePhotos || [];
-    if (remoteHousePhotos.length > housePhotos.length) {
-        // Remote has more photos - add the new ones
-        for (const photo of remoteHousePhotos) {
-            if (!housePhotos.includes(photo)) {
-                housePhotos.push(photo);
-            }
+    for (const photo of remoteHousePhotos) {
+        if (!housePhotos.includes(photo)) {
+            housePhotos.push(photo);
+            hasChanges = true;
         }
-        hasChanges = true;
     }
 
     // Sync ALL property info from remote (leader is source of truth for members)
@@ -1099,12 +1088,19 @@ function startTeamPoll() {
     teamPollInterval = setInterval(async () => {
         if (!activeTeamSession || !API_BASE || !authToken) return;
         try {
-            // Tag all inspection data with current userId for proper merge
-            const taggedData = JSON.parse(JSON.stringify(inspectionData));
-            for (const [itemId, item] of Object.entries(taggedData)) {
-                if (itemId === '__property__') continue; // skip property data
-                item.userId = currentUser?.id || '';
-                item.userName = currentUser?.displayName || '';
+            // Only send items the current user has touched (prevent overwriting others)
+            const myId = currentUser?.id || '';
+            const taggedData = {};
+            for (const [itemId, item] of Object.entries(inspectionData)) {
+                if (itemId === '__property__') continue;
+                const itemUserId = item.userId || item.selectedBy || item.lastEditedBy || '';
+                // Send if: no userId yet (uninitialized), or same user touched it last
+                if (!itemUserId || itemUserId === myId) {
+                    taggedData[itemId] = JSON.parse(JSON.stringify(item));
+                    taggedData[itemId].userId = myId;
+                    taggedData[itemId].userName = currentUser?.displayName || '';
+                    taggedData[itemId].lastEditedBy = myId;
+                }
             }
             // Embed property data in currentData for real-time sync (no backend changes needed)
             const isLeader = activeTeamSession.role === 'owner';
@@ -1437,21 +1433,24 @@ function renderItem(item, sectionId) {
 // ===== STATUS =====
 function setStatus(id, status) {
     const d = inspectionData[id];
+    // Always tag with current user for team sync
+    if (currentUser) {
+        d.userId = currentUser.id;
+        d.lastEditedBy = currentUser.id;
+    }
     if (d.status === status) {
         d.status = null;
-        d.selectedBy = null;
-        d.selectedByName = null;
         if (status === 'fail') d.issues = [];
     } else {
         d.status = status;
         if (status === 'fail' && d.issues.length === 0) {
             d.issues.push({ note:'', photos:[] });
         }
-        // Track who selected this item in team mode
-        if (document.getElementById('teamMode')?.checked && currentUser) {
-            d.selectedBy = currentUser.id;
-            d.selectedByName = currentUser.displayName || currentUser.username;
-        }
+    }
+    // Track who selected this item
+    if (currentUser) {
+        d.selectedBy = currentUser.id;
+        d.selectedByName = currentUser.displayName || currentUser.username;
     }
     updateItemUI(id);
     updateStats();
@@ -1546,6 +1545,7 @@ function updateItemUI(id) {
 // ===== ISSUES (MULTIPLE) =====
 function addIssue(itemId) {
     inspectionData[itemId].issues.push({ note:'', photos:[] });
+    if (currentUser) { inspectionData[itemId].userId = currentUser.id; inspectionData[itemId].lastEditedBy = currentUser.id; }
     renderIssues(itemId);
 }
 
@@ -1585,7 +1585,7 @@ function renderIssues(itemId) {
     `).join('');
 }
 
-function updateIssueNote(itemId, idx, val) { inspectionData[itemId].issues[idx].note = val; }
+function updateIssueNote(itemId, idx, val) { inspectionData[itemId].issues[idx].note = val; if (currentUser) { inspectionData[itemId].userId = currentUser.id; inspectionData[itemId].lastEditedBy = currentUser.id; } }
 
 async function handleIssuePhoto(itemId, idx, input) {
     for (const file of Array.from(input.files)) {
@@ -1599,6 +1599,7 @@ async function handleIssuePhoto(itemId, idx, input) {
             reader.readAsDataURL(file);
         }
     }
+    if (currentUser) { inspectionData[itemId].userId = currentUser.id; inspectionData[itemId].lastEditedBy = currentUser.id; }
     renderIssues(itemId);
     input.value = '';
 }
