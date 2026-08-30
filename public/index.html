@@ -936,27 +936,27 @@ function mergeTeamData(session) {
 
     // Server already merges data - just apply server state to local
     const remoteData = session.currentData || {};
-    let hasChanges = false;
+    const changedItems = [];
     const myId = currentUser?.id || '';
 
     for (const [itemId, remoteItem] of Object.entries(remoteData)) {
-        if (itemId === '__property__') continue; // handle property separately
+        if (itemId === '__property__') continue;
         if (!remoteItem || typeof remoteItem !== 'object') continue;
 
         const remoteUserId = remoteItem.userId || remoteItem.selectedBy || '';
 
         if (!inspectionData[itemId]) {
-            // Item exists on server but not locally - add it
             inspectionData[itemId] = JSON.parse(JSON.stringify(remoteItem));
             inspectionData[itemId].lastEditedBy = remoteUserId || '';
-            hasChanges = true;
+            changedItems.push(itemId);
         } else if (remoteUserId && remoteUserId !== myId) {
-            // Item from ANOTHER team member - use server version (already merged)
-            inspectionData[itemId].status = remoteItem.status || inspectionData[itemId].status;
+            const localStatus = inspectionData[itemId].status;
+            const remoteStatus = remoteItem.status;
+            if (remoteStatus !== localStatus) changedItems.push(itemId);
+            inspectionData[itemId].status = remoteStatus || localStatus;
             inspectionData[itemId].selectedBy = remoteItem.selectedBy || remoteUserId;
             inspectionData[itemId].selectedByName = remoteItem.selectedByName || remoteItem.userName || '';
             inspectionData[itemId].lastEditedBy = remoteUserId;
-            // Merge issues/photos from server
             if (remoteItem.issues) {
                 const localIssues = inspectionData[itemId].issues || [];
                 const remoteIssues = remoteItem.issues;
@@ -965,7 +965,6 @@ function mergeTeamData(session) {
                 }
                 for (let i = 0; i < remoteIssues.length; i++) {
                     if (!localIssues[i]) localIssues[i] = { note: '', photos: [] };
-                    // Server already merged photos - just apply
                     if (remoteIssues[i].photos && remoteIssues[i].photos.length) {
                         const localPhotos = localIssues[i].photos || [];
                         for (const photo of remoteIssues[i].photos) {
@@ -979,22 +978,20 @@ function mergeTeamData(session) {
                 }
                 inspectionData[itemId].issues = localIssues;
             }
-            hasChanges = true;
         }
-        // If item is from current user, keep local version (don't overwrite own changes)
     }
 
-    // Check for items that exist locally but not on server (we just added them, server hasn't seen yet)
-    // No action needed - next poll will include them
-
-    // Merge housePhotos from server (server already merged additively)
+    // Merge housePhotos from server
     const remoteHousePhotos = session.housePhotos || [];
     for (const photo of remoteHousePhotos) {
-        if (!housePhotos.includes(photo)) {
-            housePhotos.push(photo);
-            hasChanges = true;
-        }
+        if (!housePhotos.includes(photo)) housePhotos.push(photo);
     }
+
+    // Refresh UI for changed items
+    for (const itemId of changedItems) {
+        if (typeof updateItemUI === 'function') updateItemUI(itemId);
+    }
+    if (changedItems.length > 0 && typeof updateStats === 'function') updateStats();
 
     // Sync ALL property info from remote (leader is source of truth for members)
     const isLeader = activeTeamSession && activeTeamSession.role === 'owner';
@@ -1140,11 +1137,61 @@ function startTeamPoll() {
         } catch(e) {
             document.getElementById('teamSyncStatus').textContent = '🔴 ขาดการเชื่อมต่อ';
         }
-    }, 5000);  // Poll every 5 seconds
+    }, 2000);  // Poll every 2 seconds for real-time feel
 }
 
 function stopTeamPoll() {
     if (teamPollInterval) { clearInterval(teamPollInterval); teamPollInterval = null; }
+}
+
+// Immediate sync for real-time updates (called after status change)
+let isSyncingNow = false;
+async function syncTeamNow() {
+    if (!activeTeamSession || !API_BASE || !authToken || isSyncingNow) return;
+    isSyncingNow = true;
+    try {
+        const myId = currentUser?.id || '';
+        const taggedData = {};
+        for (const [itemId, item] of Object.entries(inspectionData)) {
+            if (itemId === '__property__') continue;
+            const itemUserId = item.userId || item.selectedBy || item.lastEditedBy || '';
+            if (!itemUserId || itemUserId === myId) {
+                taggedData[itemId] = JSON.parse(JSON.stringify(item));
+                taggedData[itemId].userId = myId;
+                taggedData[itemId].userName = currentUser?.displayName || '';
+                taggedData[itemId].lastEditedBy = myId;
+            }
+        }
+        const isLeader = activeTeamSession.role === 'owner';
+        if (isLeader) {
+            taggedData['__property__'] = {
+                ownerName: document.getElementById('ownerName')?.value?.trim() || '',
+                address: document.getElementById('address')?.value?.trim() || '',
+                houseType: document.getElementById('houseType')?.value || '',
+                inspectionDate: document.getElementById('inspectionDate')?.value || '',
+                inspectorName: document.getElementById('inspectorName')?.value?.trim() || ''
+            };
+        }
+        const updateData = {
+            currentData: taggedData,
+            housePhotos: housePhotos || [],
+            ownerName: isLeader ? (document.getElementById('ownerName')?.value?.trim() || '') : undefined,
+            address: isLeader ? (document.getElementById('address')?.value?.trim() || '') : undefined,
+            members: [{ userId: myId, displayName: currentUser?.displayName || '', color: 0 }, ...teamMembers.map((m, i) => ({ userId: m.userId, displayName: m.displayName, color: m.color ?? (i + 1) % TEAM_COLORS.length }))]
+        };
+        await fetch(`${API_BASE}/team-sessions/${activeTeamSession.sessionId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+            body: JSON.stringify(updateData)
+        });
+        // Immediately fetch merged data
+        const getRes = await fetch(`${API_BASE}/team-sessions/${activeTeamSession.sessionId}`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const getData = await getRes.json();
+        if (getData.session) mergeTeamData(getData.session);
+    } catch(e) { /* silent */ }
+    isSyncingNow = false;
 }
 
 async function leaveTeamSession() {
@@ -1433,7 +1480,6 @@ function renderItem(item, sectionId) {
 // ===== STATUS =====
 function setStatus(id, status) {
     const d = inspectionData[id];
-    // Always tag with current user for team sync
     if (currentUser) {
         d.userId = currentUser.id;
         d.lastEditedBy = currentUser.id;
@@ -1447,7 +1493,6 @@ function setStatus(id, status) {
             d.issues.push({ note:'', photos:[] });
         }
     }
-    // Track who selected this item
     if (currentUser) {
         d.selectedBy = currentUser.id;
         d.selectedByName = currentUser.displayName || currentUser.username;
@@ -1455,6 +1500,8 @@ function setStatus(id, status) {
     updateItemUI(id);
     updateStats();
     saveLocal();
+    // Immediate sync in team mode
+    if (activeTeamSession && typeof syncTeamNow === 'function') syncTeamNow();
 }
 
 function updateItemUI(id) {
