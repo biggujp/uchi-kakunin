@@ -348,6 +348,35 @@ def logout():
     return jsonify({"status": "ok", "message": "Logged out"})
 
 
+# ===== USER LIST (for team mode - any logged-in user) =====
+
+@app.route("/api/users/list", methods=["GET"])
+@require_auth
+def list_users_for_team():
+    """ดึงรายชื่อผู้ใช้สำหรับเลือกลูกทีม (any authenticated user)"""
+    try:
+        client = get_google_sheets_client()
+        if not client:
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
+
+        ws = get_or_create_worksheet(client, USERS_SHEET)
+        if not ws:
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
+
+        records = safe_get_all_records(ws)
+        users = []
+        for r in records:
+            if str(r.get("Active", "true")).lower() != "false":
+                users.append({
+                    "id": r.get("UserID", ""),
+                    "username": r.get("Username", ""),
+                    "displayName": r.get("DisplayName", ""),
+                })
+        return jsonify({"users": users})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ===== USER MANAGEMENT (Admin) =====
 
 @app.route("/api/users", methods=["GET"])

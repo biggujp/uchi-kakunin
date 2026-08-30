@@ -735,7 +735,7 @@ let activeTeamSession = null;  // { sessionId, role:'owner'|'member' }
 let teamPollInterval = null;
 let teamSessionData = {};  // Current merged data from all members
 
-function toggleTeamMode() {
+async function toggleTeamMode() {
     const enabled = document.getElementById('teamMode').checked;
     if (enabled && (!currentUser || !authToken)) {
         showToast('กรุณาเข้าสู่ระบบก่อนใช้โหมดทีม', 'error');
@@ -749,6 +749,10 @@ function toggleTeamMode() {
         teamMembers = [];
         leaveTeamSession();
     } else {
+        // โหลดรายชื่อผู้ใช้ก่อนแสดง team picker
+        if (!allUsers.length && currentUser && authToken) {
+            await loadUsers();
+        }
         renderTeamUserPicker();
     }
     renderTeamMembers();
@@ -3038,24 +3042,28 @@ function closeUserMenu() {
 
 // ===== USERS MANAGEMENT =====
 async function loadUsers() {
-    if (!API_BASE || !authToken || !currentUser || currentUser.role !== 'admin') return;
+    if (!API_BASE || !authToken || !currentUser) return;
+    const isAdmin = currentUser.role === 'admin';
     const c = document.getElementById('usersList');
-    if (c) c.innerHTML = '<div class="text-center py-6"><div class="text-2xl mb-2">⏳</div><p class="text-sm text-gray-400">กำลังโหลดผู้ใช้...</p></div>';
+    if (isAdmin && c) c.innerHTML = '<div class="text-center py-6"><div class="text-2xl mb-2">⏳</div><p class="text-sm text-gray-400">กำลังโหลดผู้ใช้...</p></div>';
     try {
-        const res = await fetch(`${API_BASE}/users`, {
+        // Admin ใช้ /users (จัดการผู้ใช้), ลูกทีมใช้ /users/list (เลือกลูกทีม)
+        const endpoint = isAdmin ? '/users' : '/users/list';
+        const res = await fetch(`${API_BASE}${endpoint}`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
         const data = await res.json();
         if (data.users) {
             allUsers = data.users;
-            renderUsers();
-            // Also refresh team user picker if team mode is active
+            // Admin แสดงรายชื่อในหน้าจัดการผู้ใช้
+            if (isAdmin) renderUsers();
+            // Refresh team user picker if team mode is active
             if (document.getElementById('teamMode')?.checked) renderTeamUserPicker();
         } else if (data.error) {
-            if (c) c.innerHTML = `<div class="text-center py-6"><div class="text-2xl mb-2">⚠️</div><p class="text-sm text-red-400">${data.error}</p></div>`;
+            if (isAdmin && c) c.innerHTML = `<div class="text-center py-6"><div class="text-2xl mb-2">⚠️</div><p class="text-sm text-red-400">${data.error}</p></div>`;
         }
     } catch(e) {
-        if (c) c.innerHTML = '<div class="text-center py-6"><div class="text-2xl mb-2">❌</div><p class="text-sm text-red-400">เชื่อมต่อ API ไม่ได้</p><p class="text-xs text-gray-300 mt-1">ตรวจสอบการตั้งค่า API_BASE ในหน้าตั้งค่า</p></div>';
+        if (isAdmin && c) c.innerHTML = '<div class="text-center py-6"><div class="text-2xl mb-2">❌</div><p class="text-sm text-red-400">เชื่อมต่อ API ไม่ได้</p><p class="text-xs text-gray-300 mt-1">ตรวจสอบการตั้งค่า API_BASE ในหน้าตั้งค่า</p></div>';
     }
 }
 
