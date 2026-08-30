@@ -758,7 +758,13 @@ function updateTeamSyncButtons() {
     document.getElementById('btnJoinTeam').classList.toggle('hidden', hasSession);
     document.getElementById('btnLeaveTeam').classList.toggle('hidden', !hasSession);
     if (hasSession) {
-        document.getElementById('teamSyncStatus').textContent = '🟢 เชื่อมต่อแล้ว';
+        const role = activeTeamSession.role === 'owner' ? 'หัวหน้าทีม' : 'ลูกทีม';
+        document.getElementById('teamSyncStatus').textContent = `🟢 เชื่อมต่อแล้ว (${role})`;
+        // ซ่อนปุ่มบันทึกรายงานเฉพาะลูกทีม (หัวหน้าบันทึกเอง)
+        const submitBar = document.getElementById('submitBar');
+        if (submitBar && activeTeamSession.role === 'member') {
+            submitBar.style.display = 'none';
+        }
     }
 }
 
@@ -850,21 +856,18 @@ async function confirmJoinSession() {
         updateTeamSyncButtons();
         startTeamPoll();
         closeJoinTeamModal();
-        showToast('เข้าร่วมทีมสำเร็จ!', 'success');
-        document.getElementById('teamSyncStatus').textContent = '🟢 เชื่อมต่อแล้ว';
-        // ซ่อนปุ่มบันทึกรายงานการตรวจสำหรับสมาชิกที่เข้าร่วม
+        showToast('เข้าร่วมทีมสำเร็จ! ✓ เลือกรายการและถ่ายรูปได้เลย', 'success');
+        document.getElementById('teamSyncStatus').textContent = '🟢 เชื่อมต่อแล้ว (ลูกทีม)';
+        // ซ่อนปุ่มบันทึกรายงานการตรวจสำหรับสมาชิกที่เข้าร่วม (หัวหน้าทีมบันทึกแทน)
         const submitBar = document.getElementById('submitBar');
         if (submitBar) submitBar.style.display = 'none';
     } catch(e) {
         showToast('ไม่สามารถเข้าร่วมทีมได้', 'error');
     }
-}
-
-function mergeTeamData(session) {
+}function mergeTeamData(session) {
     // Sync team members with colors from session
     const sessionMembers = session.members || [];
     if (sessionMembers.length > 0 && teamMembers.length === 0) {
-        // If we have no local members but session has some, sync them
         teamMembers = sessionMembers
             .filter(m => m.userId !== currentUser?.id)
             .map(m => ({ userId: m.userId, displayName: m.displayName, color: m.color ?? 0 }));
@@ -877,23 +880,73 @@ function mergeTeamData(session) {
     let hasChanges = false;
     for (const [itemId, remoteItem] of Object.entries(remoteData)) {
         if (!inspectionData[itemId]) {
+            // New item from remote - add it
             inspectionData[itemId] = remoteItem;
             hasChanges = true;
         } else {
-            // Always merge remote data - it may have different selectedBy info
-            const localStatus = inspectionData[itemId].status;
-            const remoteStatus = remoteItem.status;
-            if (remoteStatus && localStatus !== remoteStatus) {
-                inspectionData[itemId] = remoteItem;
+            const remoteUserId = remoteItem.userId || remoteItem.selectedBy || '';
+            const localUserId = inspectionData[itemId].userId || inspectionData[itemId].selectedBy || '';
+            
+            if (remoteUserId && localUserId && remoteUserId !== localUserId && remoteUserId !== currentUser?.id) {
+                // This item was changed by ANOTHER team member - always merge their changes
+                if (remoteItem.status) inspectionData[itemId].status = remoteItem.status;
+                inspectionData[itemId].selectedBy = remoteItem.selectedBy || remoteUserId;
+                inspectionData[itemId].selectedByName = remoteItem.selectedByName || remoteItem.userName || '';
+                // Merge photos from other member (add new ones, don't remove existing)
+                if (remoteItem.issues) {
+                    // Merge issues - each issue has its own photos
+                    const localIssues = inspectionData[itemId].issues || [];
+                    const remoteIssues = remoteItem.issues || [];
+                    // If remote has more issues, extend
+                    while (localIssues.length < remoteIssues.length) {
+                        localIssues.push({ note: '', photos: [] });
+                    }
+                    for (let i = 0; i < remoteIssues.length; i++) {
+                        // Merge photos from remote into local
+                        if (remoteIssues[i].photos && remoteIssues[i].photos.length) {
+                            const localPhotos = localIssues[i].photos || [];
+                            for (const photo of remoteIssues[i].photos) {
+                                if (!localPhotos.includes(photo)) {
+                                    localPhotos.push(photo);
+                                }
+                            }
+                            localIssues[i].photos = localPhotos;
+                        }
+                        // Merge note from remote if local is empty
+                        if (remoteIssues[i].note && !localIssues[i].note) {
+                            localIssues[i].note = remoteIssues[i].note;
+                        }
+                    }
+                    inspectionData[itemId].issues = localIssues;
+                }
                 hasChanges = true;
-            } else if (remoteItem.selectedBy && inspectionData[itemId].selectedBy !== remoteItem.selectedBy) {
-                // Another member selected this item - update the selectedBy
-                inspectionData[itemId].selectedBy = remoteItem.selectedBy;
-                inspectionData[itemId].selectedByName = remoteItem.selectedByName;
-                hasChanges = true;
+            } else {
+                // Same user or no userId - update status if changed
+                const remoteStatus = remoteItem.status;
+                if (remoteStatus && inspectionData[itemId].status !== remoteStatus) {
+                    inspectionData[itemId].status = remoteStatus;
+                    hasChanges = true;
+                } else if (remoteItem.selectedBy && inspectionData[itemId].selectedBy !== remoteItem.selectedBy) {
+                    inspectionData[itemId].selectedBy = remoteItem.selectedBy;
+                    inspectionData[itemId].selectedByName = remoteItem.selectedByName;
+                    hasChanges = true;
+                }
             }
         }
     }
+
+    // Merge housePhotos from session (other members' photos)
+    const remoteHousePhotos = session.housePhotos || [];
+    if (remoteHousePhotos.length > housePhotos.length) {
+        // Remote has more photos - add the new ones
+        for (const photo of remoteHousePhotos) {
+            if (!housePhotos.includes(photo)) {
+                housePhotos.push(photo);
+            }
+        }
+        hasChanges = true;
+    }
+
     // Update property info from remote if we don't have it
     if (session.ownerName && !document.getElementById('ownerName').value.trim()) {
         document.getElementById('ownerName').value = session.ownerName;
@@ -930,9 +983,16 @@ function startTeamPoll() {
     teamPollInterval = setInterval(async () => {
         if (!activeTeamSession || !API_BASE || !authToken) return;
         try {
-            // Update our data to the server
+            // Tag all inspection data with current userId for proper merge
+            const taggedData = JSON.parse(JSON.stringify(inspectionData));
+            for (const [itemId, item] of Object.entries(taggedData)) {
+                item.userId = currentUser?.id || '';
+                item.userName = currentUser?.displayName || '';
+            }
+            // Update our data to the server (including housePhotos)
             const updateData = {
-                currentData: JSON.parse(JSON.stringify(inspectionData)),
+                currentData: taggedData,
+                housePhotos: housePhotos || [],
                 ownerName: document.getElementById('ownerName').value.trim(),
                 address: document.getElementById('address').value.trim(),
                 members: [{ userId: currentUser?.id || '', displayName: currentUser?.displayName || '', color: 0 }, ...teamMembers.map((m, i) => ({ userId: m.userId, displayName: m.displayName, color: m.color ?? (i + 1) % TEAM_COLORS.length }))]
@@ -1685,6 +1745,17 @@ async function _submitInspectionInner() {
         else if (!addr) addrEl.focus();
         else if (!date) dateEl.focus();
         return;
+    }
+
+    // If in team mode, do a final sync to get latest data from all members
+    if (activeTeamSession && API_BASE && authToken) {
+        try {
+            const syncRes = await fetch(`${API_BASE}/team-sessions/${activeTeamSession.sessionId}`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const syncData = await syncRes.json();
+            if (syncData.session) mergeTeamData(syncData.session);
+        } catch(e) { /* continue with current data */ }
     }
 
     const now = new Date().toISOString();
