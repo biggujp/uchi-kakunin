@@ -880,6 +880,7 @@ async function acceptTeamInvitation() {
             localStorage.setItem('teamSession', JSON.stringify(activeTeamSession));
             updateTeamSyncButtons();
             startTeamPoll();
+            lockPropertyForm(); // ล็อคข้อมูลทรัพย์สินสำหรับลูกทีม
 
             const submitBar = document.getElementById('submitBar');
             if (submitBar) submitBar.style.display = 'none';
@@ -941,7 +942,8 @@ function mergeTeamData(session) {
             const remoteUserId = remoteItem.userId || remoteItem.selectedBy || '';
             const localUserId = inspectionData[itemId].userId || inspectionData[itemId].selectedBy || '';
             
-            if (remoteUserId && localUserId && remoteUserId !== localUserId && remoteUserId !== currentUser?.id) {
+            const isRemoteFromOther = remoteUserId && remoteUserId !== currentUser?.id;
+            if (isRemoteFromOther && (remoteUserId !== localUserId || !localUserId)) {
                 // This item was changed by ANOTHER team member - always merge their changes
                 if (remoteItem.status) inspectionData[itemId].status = remoteItem.status;
                 inspectionData[itemId].selectedBy = remoteItem.selectedBy || remoteUserId;
@@ -1001,14 +1003,31 @@ function mergeTeamData(session) {
         hasChanges = true;
     }
 
-    // Update property info from remote if we don't have it
-    if (session.ownerName && !document.getElementById('ownerName').value.trim()) {
-        document.getElementById('ownerName').value = session.ownerName;
-        hasChanges = true;
-    }
-    if (session.address && !document.getElementById('address').value.trim()) {
-        document.getElementById('address').value = session.address;
-        hasChanges = true;
+    // Sync ALL property info from remote (leader is source of truth for members)
+    const isLeader = activeTeamSession && activeTeamSession.role === 'owner';
+    if (!isLeader) {
+        // Extract property data from __property__ key in currentData OR from session top-level
+        const propData = (remoteData['__property__'] || {});
+        const propFields = [
+            { key: 'ownerName', id: 'ownerName', src: propData.ownerName || session.ownerName },
+            { key: 'address', id: 'address', src: propData.address || session.address },
+            { key: 'houseType', id: 'houseType', src: propData.houseType || session.houseType },
+            { key: 'inspectionDate', id: 'inspectionDate', src: propData.inspectionDate || session.inspectionDate },
+            { key: 'inspectorName', id: 'inspectorName', src: propData.inspectorName || session.inspectorName }
+        ];
+        for (const f of propFields) {
+            const val = f.src || '';
+            const el = document.getElementById(f.id);
+            if (el && val && el.value !== val) {
+                el.value = val;
+                hasChanges = true;
+            }
+        }
+
+        // Clean up __property__ key from inspectionData (not a real item)
+        if (inspectionData['__property__']) {
+            delete inspectionData['__property__'];
+        }
     }
     if (hasChanges) {
         updateChecklistVisibility();
@@ -1032,6 +1051,45 @@ function renderOnlineMembers(members) {
     }).join('');
 }
 
+// Lock/unlock property form for team members
+function lockPropertyForm() {
+    const fields = ['ownerName', 'address', 'houseType', 'inspectionDate', 'inspectorName'];
+    fields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.disabled = true;
+            el.classList.add('bg-gray-100', 'opacity-70', 'cursor-not-allowed');
+            el.classList.remove('bg-white');
+        }
+    });
+    // Add locked indicator
+    const propCard = document.querySelector('#ownerName')?.closest('.bg-white.rounded-2xl');
+    if (propCard && !document.getElementById('lockedBadge')) {
+        const header = propCard.querySelector('.bg-gradient-to-r');
+        if (header) {
+            const badge = document.createElement('span');
+            badge.id = 'lockedBadge';
+            badge.className = 'text-[10px] bg-white/20 px-2 py-0.5 rounded-full ml-auto';
+            badge.innerHTML = '<i class="fas fa-lock mr-1"></i>ล็อค (ลูกทีม)';
+            header.appendChild(badge);
+        }
+    }
+}
+
+function unlockPropertyForm() {
+    const fields = ['ownerName', 'address', 'houseType', 'inspectionDate', 'inspectorName'];
+    fields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.disabled = false;
+            el.classList.remove('bg-gray-100', 'opacity-70', 'cursor-not-allowed');
+            el.classList.add('bg-white');
+        }
+    });
+    const badge = document.getElementById('lockedBadge');
+    if (badge) badge.remove();
+}
+
 function startTeamPoll() {
     if (teamPollInterval) clearInterval(teamPollInterval);
     teamPollInterval = setInterval(async () => {
@@ -1040,15 +1098,27 @@ function startTeamPoll() {
             // Tag all inspection data with current userId for proper merge
             const taggedData = JSON.parse(JSON.stringify(inspectionData));
             for (const [itemId, item] of Object.entries(taggedData)) {
+                if (itemId === '__property__') continue; // skip property data
                 item.userId = currentUser?.id || '';
                 item.userName = currentUser?.displayName || '';
+            }
+            // Embed property data in currentData for real-time sync (no backend changes needed)
+            const isLeader = activeTeamSession.role === 'owner';
+            if (isLeader) {
+                taggedData['__property__'] = {
+                    ownerName: document.getElementById('ownerName').value.trim(),
+                    address: document.getElementById('address').value.trim(),
+                    houseType: document.getElementById('houseType').value,
+                    inspectionDate: document.getElementById('inspectionDate').value,
+                    inspectorName: document.getElementById('inspectorName').value.trim()
+                };
             }
             // Update our data to the server (including housePhotos)
             const updateData = {
                 currentData: taggedData,
                 housePhotos: housePhotos || [],
-                ownerName: document.getElementById('ownerName').value.trim(),
-                address: document.getElementById('address').value.trim(),
+                ownerName: isLeader ? (document.getElementById('ownerName').value.trim()) : undefined,
+                address: isLeader ? (document.getElementById('address').value.trim()) : undefined,
                 members: [{ userId: currentUser?.id || '', displayName: currentUser?.displayName || '', color: 0 }, ...teamMembers.map((m, i) => ({ userId: m.userId, displayName: m.displayName, color: m.color ?? (i + 1) % TEAM_COLORS.length }))]
             };
             await fetch(`${API_BASE}/team-sessions/${activeTeamSession.sessionId}`, {
@@ -1090,6 +1160,7 @@ async function leaveTeamSession() {
     activeTeamSession = null;
     localStorage.removeItem('teamSession');
     stopTeamPoll();
+    unlockPropertyForm(); // ปลดล็อคข้อมูลทรัพย์สินเมื่อออกจากทีม
     updateTeamSyncButtons();
     document.getElementById('teamSyncStatus').textContent = '🔄 ยังไม่ได้เชื่อมต่อ';
     document.getElementById('teamOnlineMembers').innerHTML = '';
@@ -1112,6 +1183,10 @@ function restoreTeamSession() {
             activeTeamSession = JSON.parse(saved);
             updateTeamSyncButtons();
             startTeamPoll();
+            // ล็อคข้อมูลทรัพย์สินสำหรับลูกทีม
+            if (activeTeamSession.role === 'member') {
+                lockPropertyForm();
+            }
         } catch(e) {}
     }
 }
