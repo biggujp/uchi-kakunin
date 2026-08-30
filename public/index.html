@@ -459,17 +459,7 @@
         </div>
         <div id="usersList" class="divide-y divide-gray-50"></div>
     </div>
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div class="px-5 py-4 bg-gradient-to-r from-violet-500 to-purple-600 text-white flex items-center justify-between">
-            <h2 class="font-bold text-sm flex items-center gap-2"><i class="fas fa-link"></i> จัดการรหัสทีม</h2>
-            <button onclick="loadTeamSessionsAdmin()" class="bg-white/20 px-3 py-1 rounded-lg text-xs font-semibold hover:bg-white/30 transition">
-                <i class="fas fa-sync-alt mr-1"></i> รีเฟรช
-            </button>
-        </div>
-        <div id="teamSessionsList" class="divide-y divide-gray-50">
-            <div class="text-center py-6"><div class="text-2xl mb-2">🔄</div><p class="text-sm text-gray-400">กำลังโหลด...</p></div>
-        </div>
-    </div>
+
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div class="px-5 py-4 bg-gradient-to-r from-brand-500 to-brand-600 text-white">
             <h2 class="font-bold text-sm flex items-center gap-2"><i class="fas fa-share-nodes"></i> รายงานที่ถูกแชร์มาให้</h2>
@@ -1147,7 +1137,7 @@ function switchPage(id) {
         if (submitBar) submitBar.style.display = id === 'inspect' ? 'block' : 'none';
     });
     if (id === 'settings') renderSyncStatus();
-    if (id === 'users') { loadUsers(); loadSharedReports(); loadTeamSessionsAdmin(); }
+    if (id === 'users') { loadUsers(); loadSharedReports(); }
     window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -3047,75 +3037,6 @@ async function deleteUser(userId, displayName) {
 function showAddUserForm() {
     showAuthModal();
     showRegister();
-}
-
-// ===== TEAM SESSIONS ADMIN =====
-async function loadTeamSessionsAdmin() {
-    const c = document.getElementById('teamSessionsList');
-    if (!c) return;
-    c.innerHTML = '<div class="text-center py-6"><div class="text-2xl mb-2 animate-pulse">🔄</div><p class="text-sm text-gray-400">กำลังโหลด...</p></div>';
-    try {
-        const res = await fetch(`${API_BASE}/team-sessions/all`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        const data = await res.json();
-        if (!data.sessions || !data.sessions.length) {
-            c.innerHTML = '<div class="text-center py-8"><div class="text-3xl mb-2">📋</div><p class="text-sm text-gray-400">ไม่มีรหัสทีมที่กำลังใช้งาน</p></div>';
-            return;
-        }
-        c.innerHTML = data.sessions.map(s => {
-            const memberCount = (s.members || []).length;
-            const timeAgo = s.lastUpdate ? getTimeAgo(s.lastUpdate) : '';
-            return `
-            <div class="px-5 py-3">
-                <div class="flex items-center justify-between mb-2">
-                    <div class="flex items-center gap-2">
-                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-600">🟢 Active</span>
-                        <span class="text-[10px] text-gray-400">${timeAgo}</span>
-                    </div>
-                    <button onclick="deleteTeamSessionAdmin('${s.sessionId}','${(s.address||s.ownerName).replace(/'/g,"\\'")}')" class="text-[10px] px-2 py-1 rounded-lg bg-red-100 text-red-500 hover:bg-red-200 font-semibold transition">
-                        <i class="fas fa-trash mr-1"></i>เลิกซิงค์
-                    </button>
-                </div>
-                <div class="bg-gray-50 rounded-xl p-3">
-                    <p class="text-xs font-bold text-gray-800">🔑 ${s.sessionId}</p>
-                    <p class="text-[11px] text-gray-500 mt-1">🏠 ${s.address || '-'} — ${s.ownerName || '-'}</p>
-                    <p class="text-[11px] text-gray-400 mt-0.5">👥 ${memberCount} คนในทีม</p>
-                </div>
-            </div>`;
-        }).join('');
-    } catch(e) {
-        c.innerHTML = '<div class="text-center py-6"><p class="text-sm text-red-400">เกิดข้อผิดพลาดในการโหลด</p></div>';
-    }
-}
-
-async function deleteTeamSessionAdmin(sessionId, address) {
-    if (!confirm(`เลิกซิงค์ทีม "${address}"?\n\n⚠️ สมาชิกในทีมจะถูกตัดการเชื่อมต่ออัตโนมัติ`)) return;
-    try {
-        const res = await fetch(`${API_BASE}/team-sessions/${sessionId}/delete`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }
-        });
-        const data = await res.json();
-        if (res.ok) {
-            showToast('เลิกซิงค์ทีมสำเร็จ!','success');
-            loadTeamSessionsAdmin();
-        } else {
-            showToast(data.error || 'เกิดข้อผิดพลาด','error');
-        }
-    } catch(e) { showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ','error'); }
-}
-
-function getTimeAgo(isoStr) {
-    try {
-        const diff = Date.now() - new Date(isoStr).getTime();
-        const mins = Math.floor(diff / 60000);
-        if (mins < 1) return 'เมื่อสักครู่';
-        if (mins < 60) return mins + ' นาทีที่แล้ว';
-        const hrs = Math.floor(mins / 60);
-        if (hrs < 24) return hrs + ' ชม.ที่แล้ว';
-        return Math.floor(hrs / 24) + ' วันที่แล้ว';
-    } catch(e) { return ''; }
 }
 
 // ===== SHARE =====
