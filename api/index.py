@@ -416,30 +416,31 @@ def update_user(user_id):
 
         return jsonify({"error": "User not found"}), 404
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/users/<user_id>", methods=["DELETE"])
+        return jsonify({"error": str(e)}), 500@app.route("/api/users/<user_id>", methods=["DELETE"])
 @require_admin
 def delete_user(user_id):
-    """ลบผู้ใช้ (Soft delete) (Admin)"""
+    """ลบผู้ใช้ออกจากระบบ (Hard delete - ลบออกจาก Google Sheets)"""
     try:
         client = get_google_sheets_client()
         if not client:
-            return jsonify({"status": "ok", "message": "Offline mode"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         ws = get_or_create_worksheet(client, USERS_SHEET)
         if not ws:
-            return jsonify({"status": "ok", "message": "Offline mode"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         records = safe_get_all_records(ws)
         for idx, r in enumerate(records, start=2):
             if r.get("UserID") == user_id:
-                ws.update_cell(idx, 8, "false")  # Soft delete
-                log_activity(request.user["user_id"], "delete_user", f"Deleted user {user_id}")
-                return jsonify({"status": "ok", "message": "User deleted"})
+                # ป้องกันลบตัวเอง
+                if user_id == request.user["user_id"]:
+                    return jsonify({"error": "ไม่สามารถลบตัวเองได้"}), 400
+                # Hard delete - ลบ row ออกจาก Google Sheets
+                ws.delete_rows(idx)
+                log_activity(request.user["user_id"], "delete_user", f"Deleted user {user_id} from Google Sheets")
+                return jsonify({"status": "ok", "message": "ลบผู้ใช้สำเร็จ"})
 
-        return jsonify({"error": "User not found"}), 404
+        return jsonify({"error": "ไม่พบผู้ใช้"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

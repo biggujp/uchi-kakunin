@@ -2995,15 +2995,20 @@ async function toggleUserActive(userId, currentlyActive) {
 }
 
 async function deleteUser(userId, displayName) {
-    if (!confirm(`ลบผู้ใช้ "${displayName}"?\nการกระทำนี้ไม่สามารถย้อนกลับได้`)) return;
+    if (!confirm(`ลบผู้ใช้ "${displayName}"?\n\n⚠️ ข้อมูลจะถูกลบออกจาก Google Sheets ทันที\nไม่สามารถย้อนกลับได้`)) return;
     try {
         const res = await fetch(`${API_BASE}/users/${userId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
-        if (res.ok) { showToast('ลบผู้ใช้สำเร็จ!','success'); loadUsers(); }
-        else showToast('เกิดข้อผิดพลาด','error');
-    } catch(e) { showToast('เกิดข้อผิดพลาด','error'); }
+        const data = await res.json();
+        if (res.ok) {
+            showToast('ลบผู้ใช้สำเร็จ! ✓ ลบออกจาก Google Sheets แล้ว','success');
+            loadUsers();
+        } else {
+            showToast(data.error || 'เกิดข้อผิดพลาด','error');
+        }
+    } catch(e) { showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ','error'); }
 }
 
 function showAddUserForm() {
