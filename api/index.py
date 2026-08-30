@@ -214,41 +214,15 @@ def register():
 
         client = get_google_sheets_client()
         if not client:
-            # Offline mode: create user locally (no Google Sheets)
-            print(f"[REGISTER] Google Sheets unavailable - offline mode for {username}")
-            user_id = f"user_{secrets.token_hex(8)}"
-            token = generate_token(user_id, role, display_name or username)
-            return jsonify({
-                "status": "ok",
-                "token": token,
-                "user": {
-                    "id": user_id,
-                    "username": username,
-                    "displayName": display_name or username,
-                    "role": role
-                },
-                "mode": "offline",
-                "warning": "ข้อมูลไม่ได้บันทึกลง Google Sheets - ตรวจสอบ SERVICE_ACCOUNT_JSON ใน Vercel"
-            })
+            print(f"[REGISTER] Google Sheets unavailable for {username}")
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน - กรุณาลองใหม่ภายหลัง"}), 503
 
         ws = get_or_create_worksheet(client, USERS_SHEET, [
             "UserID", "Username", "PasswordHash", "DisplayName",
             "Role", "CreatedAt", "LastLogin", "Active"
         ])
         if not ws:
-            user_id = f"user_{secrets.token_hex(8)}"
-            token = generate_token(user_id, role, display_name or username)
-            return jsonify({
-                "status": "ok",
-                "token": token,
-                "user": {
-                    "id": user_id,
-                    "username": username,
-                    "displayName": display_name or username,
-                    "role": role
-                },
-                "mode": "offline"
-            })
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน - กรุณาลองใหม่ภายหลัง"}), 503
 
         # Check duplicate
         try:
@@ -298,40 +272,15 @@ def login():
         if not username or not password:
             return jsonify({"error": "กรุณากรอก username และ password"}), 400
 
-        # Offline mode: when Google Sheets is not configured
         client = get_google_sheets_client()
         if not client:
-            print(f"[LOGIN] Google Sheets unavailable - offline mode for {username}")
-            token = generate_token("offline_user", "admin", username)
-            return jsonify({
-                "status": "ok",
-                "token": token,
-                "user": {
-                    "id": "offline_user",
-                    "username": username,
-                    "displayName": username,
-                    "role": "admin"
-                },
-                "mode": "offline",
-                "warning": "ไม่ได้เชื่อมต่อ Google Sheets - ตรวจสอบ SERVICE_ACCOUNT_JSON ใน Vercel"
-            })
+            print(f"[LOGIN] Google Sheets unavailable for {username}")
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน - กรุณาลองใหม่ภายหลัง"}), 503
 
         ws = get_or_create_worksheet(client, USERS_SHEET)
         if not ws:
             print(f"[LOGIN] Users sheet not found for {username}")
-            token = generate_token("offline_user", "admin", username)
-            return jsonify({
-                "status": "ok",
-                "token": token,
-                "user": {
-                    "id": "offline_user",
-                    "username": username,
-                    "displayName": username,
-                    "role": "admin"
-                },
-                "mode": "offline",
-                "warning": "Users sheet not found in Google Sheets"
-            })
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน - กรุณาลองใหม่ภายหลัง"}), 503
 
         password_hash = hashlib.sha256(password.encode()).hexdigest()
         try:
@@ -408,11 +357,11 @@ def get_users():
     try:
         client = get_google_sheets_client()
         if not client:
-            return jsonify({"status": "ok", "users": [], "mode": "offline", "error": "Google Sheets client unavailable - check SERVICE_ACCOUNT_JSON"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน - Google Sheets ไม่เชื่อมต่อ"}), 503
 
         ws = get_or_create_worksheet(client, USERS_SHEET)
         if not ws:
-            return jsonify({"status": "ok", "users": [], "mode": "offline", "error": "Users sheet not found - check GOOGLE_SHEETS_ID"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน - Google Sheets ไม่เชื่อมต่อ"}), 503
 
         try:
             records = safe_get_all_records(ws)
@@ -512,14 +461,14 @@ def share_report():
 
         client = get_google_sheets_client()
         if not client:
-            return jsonify({"status": "ok", "shareId": "offline", "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         ws = get_or_create_worksheet(client, SHARE_SHEET, [
             "ShareID", "InspectionID", "SharedBy", "ShareWith",
             "Permission", "CreatedAt"
         ])
         if not ws:
-            return jsonify({"status": "ok", "shareId": "offline", "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         share_id = f"share_{secrets.token_hex(8)}"
         ws.append_row([
@@ -944,14 +893,14 @@ def create_notification():
         client = get_google_sheets_client()
         if not client:
             notif_id = f"notif_{secrets.token_hex(8)}"
-            return jsonify({"status": "ok", "notifId": notif_id, "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         ws = get_or_create_worksheet(client, NOTIFICATION_SHEET, [
             "NotifID", "UserID", "Type", "Title", "Message", "Link", "Read", "CreatedAt"
         ])
         if not ws:
             notif_id = f"notif_{secrets.token_hex(8)}"
-            return jsonify({"status": "ok", "notifId": notif_id, "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         notif_id = f"notif_{secrets.token_hex(8)}"
         ws.append_row([
@@ -971,11 +920,11 @@ def mark_all_read():
     try:
         client = get_google_sheets_client()
         if not client:
-            return jsonify({"status": "ok", "marked": 0, "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         ws = get_or_create_worksheet(client, NOTIFICATION_SHEET)
         if not ws:
-            return jsonify({"status": "ok", "marked": 0, "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         records = safe_get_all_records(ws)
         user_id = request.user["user_id"]
@@ -997,11 +946,11 @@ def mark_notification_read(notif_id):
     try:
         client = get_google_sheets_client()
         if not client:
-            return jsonify({"status": "ok", "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         ws = get_or_create_worksheet(client, NOTIFICATION_SHEET)
         if not ws:
-            return jsonify({"status": "ok", "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         records = safe_get_all_records(ws)
         for idx, r in enumerate(records, start=2):
@@ -1083,14 +1032,14 @@ def save_custom_items():
         client = get_google_sheets_client()
         if not client:
             count = sum(len(v) for v in items.values())
-            return jsonify({"status": "ok", "count": count, "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         ws = get_or_create_worksheet(client, CUSTOM_ITEMS_SHEET, [
             "UserID", "SectionID", "ItemID", "Text", "CreatedAt"
         ])
         if not ws:
             count = sum(len(v) for v in items.values())
-            return jsonify({"status": "ok", "count": count, "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         user_id = request.user["user_id"]
 
@@ -1153,7 +1102,7 @@ SYNC_QUEUE_SHEET = "SyncQueue"
 @app.route("/api/sync-queue", methods=["POST"])
 @require_auth
 def add_to_sync_queue():
-    """เพิ่มลง sync queue สำหรับ offline operations"""
+    """Sync queue for pending operations"""
     try:
         data = request.get_json()
         action = data.get("action")  # create_inspection, save_custom_items, etc.
@@ -1162,14 +1111,14 @@ def add_to_sync_queue():
         client = get_google_sheets_client()
         if not client:
             queue_id = f"q_{secrets.token_hex(8)}"
-            return jsonify({"status": "ok", "queueId": queue_id, "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         ws = get_or_create_worksheet(client, SYNC_QUEUE_SHEET, [
             "QueueID", "UserID", "Action", "Payload", "Status", "CreatedAt", "ProcessedAt"
         ])
         if not ws:
             queue_id = f"q_{secrets.token_hex(8)}"
-            return jsonify({"status": "ok", "queueId": queue_id, "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         queue_id = f"q_{secrets.token_hex(8)}"
         ws.append_row([
@@ -1190,11 +1139,11 @@ def process_sync_queue():
     try:
         client = get_google_sheets_client()
         if not client:
-            return jsonify({"status": "ok", "processed": 0, "errors": 0, "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         ws = get_or_create_worksheet(client, SYNC_QUEUE_SHEET)
         if not ws:
-            return jsonify({"status": "ok", "processed": 0, "errors": 0, "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         records = safe_get_all_records(ws)
         user_id = request.user["user_id"]
@@ -1325,7 +1274,7 @@ def create_team_session():
 
         client = get_google_sheets_client()
         if not client:
-            return jsonify({"status": "ok", "sessionId": session_id, "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         ws = get_or_create_worksheet(client, TEAM_SESSION_SHEET, [
             "SessionID", "OwnerUserID", "OwnerName", "Address",
@@ -1333,7 +1282,7 @@ def create_team_session():
             "CreatedAt", "HousePhotos"
         ])
         if not ws:
-            return jsonify({"status": "ok", "sessionId": session_id, "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         ws.append_row([
             session_id,
@@ -1363,11 +1312,11 @@ def update_team_session(session_id):
 
         client = get_google_sheets_client()
         if not client:
-            return jsonify({"status": "ok", "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         ws = get_or_create_worksheet(client, TEAM_SESSION_SHEET)
         if not ws:
-            return jsonify({"status": "ok", "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         records = safe_get_all_records(ws)
         for idx, r in enumerate(records, start=2):
@@ -1450,11 +1399,11 @@ def join_team_session(session_id):
     try:
         client = get_google_sheets_client()
         if not client:
-            return jsonify({"status": "ok", "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         ws = get_or_create_worksheet(client, TEAM_SESSION_SHEET)
         if not ws:
-            return jsonify({"status": "ok", "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         records = safe_get_all_records(ws)
         for idx, r in enumerate(records, start=2):
@@ -1501,11 +1450,11 @@ def list_team_sessions():
     try:
         client = get_google_sheets_client()
         if not client:
-            return jsonify({"status": "ok", "sessions": [], "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         ws = get_or_create_worksheet(client, TEAM_SESSION_SHEET)
         if not ws:
-            return jsonify({"status": "ok", "sessions": [], "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         records = safe_get_all_records(ws)
         user_id = request.user["user_id"]
@@ -1544,11 +1493,11 @@ def complete_team_session(session_id):
 
         client = get_google_sheets_client()
         if not client:
-            return jsonify({"status": "ok", "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         ws = get_or_create_worksheet(client, TEAM_SESSION_SHEET)
         if not ws:
-            return jsonify({"status": "ok", "mode": "offline"})
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         records = safe_get_all_records(ws)
         for idx, r in enumerate(records, start=2):

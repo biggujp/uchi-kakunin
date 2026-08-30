@@ -74,7 +74,6 @@
             <p class="text-center text-sm text-gray-400 mt-4">
                 ยังไม่มีบัญชี? <button onclick="showRegister()" class="text-brand-600 font-semibold">สมัครสมาชิก</button>
             </p>
-            <button onclick="closeAuthModal()" class="w-full mt-3 py-2 text-gray-400 text-sm">ข้าม - ใช้งานออฟไลน์</button>
         </div>
         <!-- Register Form -->
         <div id="registerForm" class="p-6 hidden">
@@ -536,9 +535,8 @@
         </div>
         <div class="p-5 space-y-3">
             <div id="syncOnlineStatus"></div>
-            <div id="syncQueueStatus"></div>
-            <button onclick="processSyncQueue();syncCustomItemsToServer()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm active:scale-[0.98] transition">
-                <i class="fas fa-sync mr-1"></i> บังคับซิงค์ตอนนี้
+            <button onclick="syncCustomItemsToServer()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm active:scale-[0.98] transition">
+                <i class="fas fa-sync mr-1"></i> ซิงค์ข้อมูล
             </button>
         </div>
     </div>
@@ -1810,7 +1808,7 @@ async function _submitInspectionInner() {
     document.getElementById('editModeBanner').classList.add('hidden');
     generateReport(report);
 
-    // Sync to API (online or queue for offline)
+    // Sync to API
     syncToAPI(report);
 
     const msg = wasEditing ? 'แก้ไขรายการสำเร็จ! ✓' : 'บันทึกรายงานสำเร็จ! ✓';
@@ -2447,8 +2445,7 @@ async function testGoogleSheets() {
 
 function renderSyncStatus() {
     const onlineEl = document.getElementById('syncOnlineStatus');
-    const queueEl = document.getElementById('syncQueueStatus');
-    if (!onlineEl || !queueEl) return;
+    if (!onlineEl) return;
     // Auto-check Google Sheets connection
     testGoogleSheets();
 
@@ -2457,27 +2454,10 @@ function renderSyncStatus() {
             <div class="w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}"></div>
             <div class="flex-1">
                 <p class="text-sm font-semibold ${isOnline ? 'text-emerald-600' : 'text-rose-600'}">${isOnline ? '🟢 ออนไลน์' : '🔴 ออฟไลน์'}</p>
-                <p class="text-[11px] text-gray-400">${isOnline ? 'ข้อมูลจะซิงค์ทันที' : 'กรุณาเชื่อมต่ออินเทอร์เน็ต'}</p>
+                <p class="text-[11px] text-gray-400">${isOnline ? 'เชื่อมต่อ Google Sheets ได้' : 'กรุณาเชื่อมต่ออินเทอร์เน็ต'}</p>
             </div>
         </div>
     `;
-
-    if (syncQueue.length > 0) {
-        queueEl.innerHTML = `
-            <div class="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
-                <i class="fas fa-clock text-amber-500"></i>
-                <span class="text-amber-700 font-semibold">รอซิงค์ ${syncQueue.length} รายการ</span>
-                <button onclick="processSyncQueue()" class="ml-auto text-amber-600 hover:text-amber-800 text-xs font-bold">ซิงค์เลย</button>
-            </div>
-        `;
-    } else {
-        queueEl.innerHTML = `
-            <div class="flex items-center gap-2 p-3 rounded-xl bg-emerald-50">
-                <i class="fas fa-check-circle text-emerald-500"></i>
-                <span class="text-emerald-700 text-sm">ซิงค์ข้อมูลครบถ้วน ✓</span>
-            </div>
-        `;
-    }
 }
 
 // ===== LOCAL STORAGE =====
@@ -2521,8 +2501,8 @@ async function loadSaved() {
 
 // ===== API SYNC =====
 async function syncToAPI(r) {
-    if (!isOnline || !API_BASE || !authToken) {
-        showToast('❌ ไม่สามารถบันทึกได้ - ไม่มีสัญญาณอินเทอร์เน็ต','error');
+    if (!API_BASE || !authToken) {
+        showToast('❌ ไม่สามารถบันทึกได้ - กรุณาเข้าสู่ระบบ','error');
         return;
     }
     try {
@@ -2765,15 +2745,20 @@ function checkAuth() {
                 loadCustomItemsFromServer();
                 checkUnreadCount();
                 startNotifPoll();
-                // Process any pending sync queue items
-                if (syncQueue.length > 0) {
-                    setTimeout(() => processSyncQueue(), 2000);
-                }
             } else {
                 authToken = '';
                 localStorage.removeItem('authToken');
+                currentUser = null;
+                showAuthModal();
             }
-        }).catch(() => {});
+        }).catch(() => {
+            // API unreachable - show auth modal
+            currentUser = null;
+            showAuthModal();
+        });
+    } else {
+        // No token - show auth modal
+        showAuthModal();
     }
 }
 
@@ -2785,6 +2770,11 @@ function showAuthModal() {
 }
 
 function closeAuthModal() {
+    // ไม่ปิด modal ถ้ายังไม่ได้เข้าสู่ระบบ
+    if (!currentUser) {
+        showToast('กรุณาเข้าสู่ระบบก่อนใช้งาน', 'error');
+        return;
+    }
     document.getElementById('authModal').classList.add('hidden');
     const submitBar = document.getElementById('submitBar');
     const inspectPage = document.getElementById('pg-inspect');
@@ -2823,18 +2813,11 @@ async function doLogin() {
             updateUserUI();
             closeAuthModal();
             showToast(`สวัสดี ${data.user.displayName}! 👋`,'success');
-            if (data.warning || data.mode === 'offline') {
-                setTimeout(() => showToast(`⚠️ ${data.warning || 'โหมดออฟไลน์ - ข้อมูลไม่ได้บันทึกลง Google Sheets'}`, 'error'), 1500);
-            }
             loadUsers();
             loadSharedReports();
             loadCustomItemsFromServer();
             checkUnreadCount();
             startNotifPoll();
-            // Process pending sync queue
-            if (syncQueue.length > 0) {
-                setTimeout(() => processSyncQueue(), 1000);
-            }
         } else {
             showToast(data.error || 'เข้าสู่ระบบไม่สำเร็จ','error');
         }
@@ -2865,9 +2848,6 @@ async function doRegister() {
             updateUserUI();
             closeAuthModal();
             showToast(`สมัครสำเร็จ! สวัสดี ${data.user.displayName}! 🎉`,'success');
-            if (data.warning || data.mode === 'offline') {
-                setTimeout(() => showToast(`⚠️ ${data.warning || 'โหมดออฟไลน์ - ข้อมูลไม่ได้บันทึกลง Google Sheets'}`, 'error'), 1500);
-            }
             loadUsers();
             startNotifPoll();
         } else {
@@ -2886,6 +2866,8 @@ function doLogout() {
     updateUserUI();
     closeUserMenu();
     showToast('ออกจากระบบแล้ว','');
+    // แสดงหน้าเข้าสู่ระบบหลังออก
+    setTimeout(() => showAuthModal(), 500);
 }
 
 function updateUserUI() {
@@ -2943,10 +2925,10 @@ function openUserMenu() {
         content.innerHTML = `
             <div class="text-center mb-4">
                 <div class="w-16 h-16 mx-auto rounded-2xl bg-gray-200 flex items-center justify-center text-gray-400 text-2xl mb-2">
-                    <i class="fas fa-user"></i>
+                    <i class="fas fa-user-lock"></i>
                 </div>
-                <h3 class="font-bold text-gray-500">ยังไม่ได้เข้าสู่ระบบ</h3>
-                <p class="text-sm text-gray-400">ใช้งานออฟไลน์ได้</p>
+                <h3 class="font-bold text-gray-500">กรุณาเข้าสู่ระบบ</h3>
+                <p class="text-sm text-gray-400">ต้องเข้าสู่ระบบก่อนใช้งาน</p>
             </div>
             <div class="space-y-2">
                 <button onclick="closeUserMenu();showAuthModal()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white font-bold text-sm"><i class="fas fa-right-to-bracket mr-1"></i> เข้าสู่ระบบ / สมัครสมาชิก</button>
@@ -3181,15 +3163,13 @@ function viewSharedReport(inspectionId) {
 }
 
 // ===== OFFLINE / SYNC QUEUE =====
+// Online-only mode: ไม่รองรับออฟไลน์อีกต่อไป
 let isOnline = navigator.onLine;
-let syncQueue = JSON.parse(localStorage.getItem('syncQueue') || '[]');
 
-// Network status detection
 window.addEventListener('online', () => {
     isOnline = true;
-    showToast('🌐 กลับมาออนไลน์แล้ว - กำลังซิงค์...','success');
+    showToast('🌐 เชื่อมต่ออินเทอร์เน็ตแล้ว','success');
     renderSyncStatus();
-    processSyncQueue();
     syncCustomItemsToServer();
 });
 
@@ -3198,79 +3178,6 @@ window.addEventListener('offline', () => {
     showToast('❌ ไม่มีสัญญาณอินเทอร์เน็ต - กรุณาเชื่อมต่ออินเทอร์เน็ตก่อนใช้งาน','error');
     renderSyncStatus();
 });
-
-// Add action to sync queue (for offline use)
-function addToSyncQueue(action, payload) {
-    const queueItem = {
-        id: 'q_' + Date.now(),
-        action: action,
-        payload: payload,
-        createdAt: new Date().toISOString()
-    };
-    syncQueue.push(queueItem);
-    localStorage.setItem('syncQueue', JSON.stringify(syncQueue));
-    return queueItem;
-}
-
-// Process sync queue when online
-async function processSyncQueue() {
-    if (!isOnline || !API_BASE || !authToken || syncQueue.length === 0) return;
-
-    showToast(`📡 กำลังซิงค์ ${syncQueue.length} รายการ...`,'');
-    let processed = 0;
-    let errors = 0;
-
-    for (const item of [...syncQueue]) {
-        try {
-            if (item.action === 'create_inspection') {
-                const res = await fetch(`${API_BASE}/inspections`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify(item.payload)
-                });
-                if (res.ok) processed++;
-                else errors++;
-            } else if (item.action === 'save_custom_items') {
-                const res = await fetch(`${API_BASE}/custom-items`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify(item.payload)
-                });
-                if (res.ok) processed++;
-                else errors++;
-            } else if (item.action === 'share_report') {
-                const res = await fetch(`${API_BASE}/share`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify(item.payload)
-                });
-                if (res.ok) processed++;
-                else errors++;
-            }
-            // Remove processed item
-            syncQueue = syncQueue.filter(q => q.id !== item.id);
-        } catch (e) {
-            errors++;
-            break; // Stop if network fails again
-        }
-    }
-
-    localStorage.setItem('syncQueue', JSON.stringify(syncQueue));
-
-    if (processed > 0) {
-        showToast(`✅ ซิงค์สำเร็จ ${processed} รายการ${errors > 0 ? `, ผิดพลาด ${errors}` : ''}`,'success');
-    }
-    renderSyncStatus();
-}
 
 // ===== CUSTOM ITEMS =====
 let customItems = JSON.parse(localStorage.getItem('customChecklistItems') || '{}');
@@ -3351,7 +3258,7 @@ function deleteCustomItem(sectionId, itemId) {
 
 // ===== SYNC CUSTOM ITEMS TO SERVER =====
 async function syncCustomItemsToServer() {
-    if (!isOnline || !API_BASE || !authToken) return;
+    if (!API_BASE || !authToken) return;
 
     try {
         const res = await fetch(`${API_BASE}/custom-items`, {
@@ -3370,7 +3277,7 @@ async function syncCustomItemsToServer() {
 
 // Load custom items from server
 async function loadCustomItemsFromServer() {
-    if (!isOnline || !API_BASE || !authToken) return;
+    if (!API_BASE || !authToken) return;
 
     try {
         const res = await fetch(`${API_BASE}/custom-items`, {
