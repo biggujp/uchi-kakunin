@@ -624,7 +624,10 @@ let inspectionData = {};
 
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('inspectionDate').valueAsDate = new Date();
+    // Set today's date only if no saved date exists
+    if (!localStorage.getItem('inspectionDate')) {
+        document.getElementById('inspectionDate').valueAsDate = new Date();
+    }
     loadSaved();
     loadSettings();
     renderChecklist();
@@ -635,7 +638,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // Checklist visibility: show only when property info is filled
     updateChecklistVisibility();
     ['ownerName', 'address'].forEach(id => {
-        document.getElementById(id).addEventListener('input', updateChecklistVisibility);
+        document.getElementById(id).addEventListener('input', () => { updateChecklistVisibility(); savePropertyInfo(); });
+    });
+    // Auto-save all property fields on change
+    ['ownerName', 'address', 'inspectorName'].forEach(id => {
+        document.getElementById(id).addEventListener('input', savePropertyInfo);
+    });
+    ['houseType', 'inspectionDate'].forEach(id => {
+        document.getElementById(id).addEventListener('change', savePropertyInfo);
+    });
+    // Save everything before page close/refresh
+    window.addEventListener('beforeunload', () => {
+        savePropertyInfo();
+        saveLocal();
+        saveHousePhotosLocal();
     });
     // Restore team session if exists
     restoreTeamSession();
@@ -2000,6 +2016,9 @@ async function _submitInspectionInner() {
     document.getElementById('editModeBanner').classList.add('hidden');
     generateReport(report);
 
+    // Clear draft data after successful save
+    clearDraft();
+
     // Sync to API
     syncToAPI(report);
 
@@ -2611,14 +2630,28 @@ async function saveHousePhotosLocal() {
     localStorage.setItem('housePhotos', JSON.stringify(housePhotos));
 }
 function savePropertyInfo() {
-    ['ownerName','address','houseType','inspectorName'].forEach(f => localStorage.setItem(f, document.getElementById(f).value));
+    ['ownerName','address','houseType','inspectorName','inspectionDate'].forEach(f => {
+        const el = document.getElementById(f);
+        if (el) localStorage.setItem(f, el.value);
+    });
+}
+function clearDraft() {
+    localStorage.removeItem('inspectionData');
+    localStorage.removeItem('housePhotos');
+    ['ownerName','address','houseType','inspectorName','inspectionDate'].forEach(f => localStorage.removeItem(f));
+    inspectionData = {};
+    housePhotos = [];
 }
 async function loadSaved() {
     const d = localStorage.getItem('inspectionData');
     if (d) inspectionData = JSON.parse(d);
-    ['ownerName','address','houseType','inspectorName'].forEach(f => {
+    // Restore all property fields including inspectionDate
+    ['ownerName','address','houseType','inspectorName','inspectionDate'].forEach(f => {
         const v = localStorage.getItem(f);
-        if (v) document.getElementById(f).value = v;
+        if (v) {
+            const el = document.getElementById(f);
+            if (el) el.value = v;
+        }
     });
     const hp = localStorage.getItem('housePhotos');
     if (hp) {
