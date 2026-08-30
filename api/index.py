@@ -1289,12 +1289,22 @@ def create_team_session():
         if not ws:
             return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
+        # Mark all non-owner members as 'pending'
+        members_with_status = []
+        for m in members:
+            entry = dict(m)
+            if entry.get("userId") == request.user["user_id"]:
+                entry["status"] = "active"
+            else:
+                entry["status"] = "pending"
+            members_with_status.append(entry)
+
         ws.append_row([
             session_id,
             request.user["user_id"],
             owner_name,
             address,
-            json.dumps(members, ensure_ascii=False),
+            json.dumps(members_with_status, ensure_ascii=False),
             "active",
             json.dumps(data.get("initialData", {}), ensure_ascii=False),
             datetime.now().isoformat(),
@@ -1400,7 +1410,7 @@ def get_team_session(session_id):
 @app.route("/api/team-sessions/<session_id>/join", methods=["POST"])
 @require_auth
 def join_team_session(session_id):
-    """เข้าร่วม team session"""
+    """ตอบรับคำเชิญเข้าทีม (เปลี่ยน status จาก pending เป็น active)"""
     try:
         client = get_google_sheets_client()
         if not client:
@@ -1411,6 +1421,9 @@ def join_team_session(session_id):
             return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
 
         records = safe_get_all_records(ws)
+        user_id = request.user["user_id"]
+        display_name = request.user.get("displayName", user_id)
+
         for idx, r in enumerate(records, start=2):
             if r.get("SessionID") == session_id:
                 members = []
@@ -1418,32 +1431,121 @@ def join_team_session(session_id):
                     members = json.loads(r.get("Members", "[]"))
                 except: pass
 
-                user_id = request.user["user_id"]
-                display_name = request.user.get("displayName", user_id)
+                # Find member and change status to active
+                found = False
+                for m in members:
+                    if m.get("userId") == user_id:
+                        m["status"] = "active"
+                        found = True
+                        break
 
-                # Check if already in team
-                already = any(m.get("userId") == user_id for m in members)
-                if not already:
-                    members.append({"userId": user_id, "displayName": display_name})
-                    ws.update_cell(idx, 5, json.dumps(members, ensure_ascii=False))
-                    ws.update_cell(idx, 8, datetime.now().isoformat())
+                if not found:
+                    return jsonify({"error": "คุณไม่ได้รับเชิญเข้าทีมนี้"}), 403
 
-                    # Send push notification to ALL existing team members
-                    owner_name = r.get("OwnerName", "")
-                    address = r.get("Address", "")
-                    existing_member_ids = [m.get("userId") for m in members if m.get("userId") and m.get("userId") != user_id]
-                    for member_id in existing_member_ids:
-                        _create_notification_internal(
-                            target_user_id=member_id,
-                            notif_type="team_member_joined",
-                            title="👥 สมาชิกใหม่เข้าทีม",
-                            message=f"{display_name} เข้าร่วมทีมตรวจที่ {address or owner_name} แล้ว",
-                            link=f"team:{session_id}"
-                        )
+                ws.update_cell(idx, 5, json.dumps(members, ensure_ascii=False))
+                ws.update_cell(idx, 8, datetime.now().isoformat())
 
-                return jsonify({"status": "ok", "message": "Joined team"})
+                # Notify owner
+                owner_id = r.get("OwnerUserID")
+                if owner_id and owner_id != user_id:
+                    _create_notification_internal(
+                        target_user_id=owner_id,
+                        notif_type="team_member_joined",
+                        title="👥 ลูกทีมตอบรับ",
+                        message=f"{display_name} ตอบรับเข้าร่วมทีมตรวจแล้ว",
+                        link=f"team:{session_id}"
+                    )
+
+                return jsonify({"status": "ok", "message": "Accepted invitation"})
 
         return jsonify({"error": "Session not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/team-sessions/<session_id>/decline", methods=["POST"])
+@require_auth
+def decline_team_session(session_id):
+    """ปฏิเสธคำเชิญเข้าทีม (ลบตัวเองออกจาก members)"""
+    try:
+        client = get_google_sheets_client()
+        if not client:
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
+
+        ws = get_or_create_worksheet(client, TEAM_SESSION_SHEET)
+        if not ws:
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
+
+        records = safe_get_all_records(ws)
+        user_id = request.user["user_id"]
+        display_name = request.user.get("displayName", user_id)
+
+        for idx, r in enumerate(records, start=2):
+            if r.get("SessionID") == session_id:
+                members = []
+                try:
+                    members = json.loads(r.get("Members", "[]"))
+                except: pass
+
+                # Remove this user from members
+                members = [m for m in members if m.get("userId") != user_id]
+                ws.update_cell(idx, 5, json.dumps(members, ensure_ascii=False))
+                ws.update_cell(idx, 8, datetime.now().isoformat())
+
+                # Notify owner
+                owner_id = r.get("OwnerUserID")
+                if owner_id and owner_id != user_id:
+                    _create_notification_internal(
+                        target_user_id=owner_id,
+                        notif_type="team_member_declined",
+                        title="👥 ลูกทีมปฏิเสธ",
+                        message=f"{display_name} ปฏิเสธคำเชิญเข้าทีมตรวจ",
+                        link=""
+                    )
+
+                return jsonify({"status": "ok"})
+
+        return jsonify({"error": "Session not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/team-sessions/pending", methods=["GET"])
+@require_auth
+def get_pending_invitations():
+    """ดึง team sessions ที่ user ถูกเชิญแต่ยังไม่ได้ตอบรับ"""
+    try:
+        client = get_google_sheets_client()
+        if not client:
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
+
+        ws = get_or_create_worksheet(client, TEAM_SESSION_SHEET)
+        if not ws:
+            return jsonify({"error": "ระบบไม่พร้อมใช้งาน"}), 503
+
+        records = safe_get_all_records(ws)
+        user_id = request.user["user_id"]
+
+        invitations = []
+        for r in records:
+            if r.get("Status") == "active":
+                members = []
+                try:
+                    members = json.loads(r.get("Members", "[]"))
+                except: pass
+
+                for m in members:
+                    if m.get("userId") == user_id and m.get("status") == "pending":
+                        invitations.append({
+                            "sessionId": r.get("SessionID"),
+                            "ownerName": r.get("OwnerName"),
+                            "address": r.get("Address"),
+                            "ownerUserId": r.get("OwnerUserID"),
+                            "createdAt": r.get("CreatedAt")
+                        })
+                        break
+
+        return jsonify({"status": "ok", "invitations": invitations})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1472,8 +1574,9 @@ def list_team_sessions():
                 try:
                     members = json.loads(r.get("Members", "[]"))
                 except: pass
-                is_member = (r.get("OwnerUserID") == user_id or
-                            any(m.get("userId") == user_id for m in members))
+                is_owner = r.get("OwnerUserID") == user_id
+                is_active_member = any(m.get("userId") == user_id and m.get("status", "active") == "active" for m in members)
+                is_member = is_owner or is_active_member
                 if is_member or user_role == "admin":
                     sessions.append({
                         "sessionId": r.get("SessionID"),
