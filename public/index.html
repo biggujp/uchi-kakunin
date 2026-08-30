@@ -812,10 +812,21 @@ async function createTeamSession() {
 function joinTeamSession() {
     document.getElementById('joinTeamModal').classList.remove('hidden');
     document.getElementById('joinSessionInput').focus();
+    // ซ่อนปุ่มบันทึกรายงานการตรวจเมื่อกดเข้าร่วมทีม
+    const submitBar = document.getElementById('submitBar');
+    if (submitBar) submitBar.style.display = 'none';
 }
 
 function closeJoinTeamModal() {
     document.getElementById('joinTeamModal').classList.add('hidden');
+    // แสดงปุ่มบันทึกรายงานกลับมาเมื่อยกเลิก (เฉพาะ owner ที่ยังไม่ได้เข้าทีม)
+    if (!activeTeamSession || activeTeamSession.role === 'owner') {
+        const submitBar = document.getElementById('submitBar');
+        const inspectPage = document.getElementById('pg-inspect');
+        if (submitBar && inspectPage && !inspectPage.classList.contains('hidden')) {
+            submitBar.style.display = 'block';
+        }
+    }
 }
 
 async function confirmJoinSession() {
